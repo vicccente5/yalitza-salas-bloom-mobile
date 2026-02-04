@@ -113,7 +113,7 @@ class _SuppliesScreenState extends State<SuppliesScreen> {
             child: const Text('Cancelar'),
           ),
           ElevatedButton(
-            onPressed: () {
+            onPressed: () async {
               if (nameController.text.trim().isEmpty ||
                   unitCostController.text.trim().isEmpty ||
                   unitController.text.trim().isEmpty ||
@@ -138,7 +138,19 @@ class _SuppliesScreenState extends State<SuppliesScreen> {
                 'createdAt': DateTime.now(),
               };
 
-              _dataManager.addSupply(newSupply);
+              final ok = await _dataManager.addSupply(newSupply);
+              if (!context.mounted) return;
+
+              if (!ok) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text(_dataManager.lastError ?? 'No se pudo agregar el suministro'),
+                    backgroundColor: AppTheme.errorColor,
+                    duration: const Duration(seconds: 6),
+                  ),
+                );
+                return;
+              }
 
               Navigator.of(context).pop();
               ScaffoldMessenger.of(context).showSnackBar(
@@ -219,7 +231,7 @@ class _SuppliesScreenState extends State<SuppliesScreen> {
             child: const Text('Cancelar'),
           ),
           ElevatedButton(
-            onPressed: () {
+            onPressed: () async {
               if (nameController.text.trim().isEmpty ||
                   unitCostController.text.trim().isEmpty ||
                   unitController.text.trim().isEmpty ||
@@ -242,7 +254,19 @@ class _SuppliesScreenState extends State<SuppliesScreen> {
                 'minimumStock': double.tryParse(minimumStockController.text.trim()) ?? 0.0,
               };
 
-              _dataManager.updateSupply(supply['id'], updates);
+              final ok = await _dataManager.updateSupply(supply['id'], updates);
+              if (!context.mounted) return;
+
+              if (!ok) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text(_dataManager.lastError ?? 'No se pudo actualizar el suministro'),
+                    backgroundColor: AppTheme.errorColor,
+                    duration: const Duration(seconds: 6),
+                  ),
+                );
+                return;
+              }
 
               Navigator.of(context).pop();
               ScaffoldMessenger.of(context).showSnackBar(
@@ -290,7 +314,7 @@ class _SuppliesScreenState extends State<SuppliesScreen> {
             child: const Text('Cancelar'),
           ),
           ElevatedButton(
-            onPressed: () {
+            onPressed: () async {
               final newStock = double.tryParse(stockController.text.trim());
               if (newStock == null) {
                 ScaffoldMessenger.of(context).showSnackBar(
@@ -302,7 +326,19 @@ class _SuppliesScreenState extends State<SuppliesScreen> {
                 return;
               }
 
-              _dataManager.updateSupply(supply['id'], {'currentStock': newStock});
+              final ok = await _dataManager.updateSupply(supply['id'], {'currentStock': newStock});
+              if (!context.mounted) return;
+
+              if (!ok) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text(_dataManager.lastError ?? 'No se pudo actualizar el stock'),
+                    backgroundColor: AppTheme.errorColor,
+                    duration: const Duration(seconds: 6),
+                  ),
+                );
+                return;
+              }
 
               Navigator.of(context).pop();
               ScaffoldMessenger.of(context).showSnackBar(
@@ -331,13 +367,17 @@ class _SuppliesScreenState extends State<SuppliesScreen> {
             child: const Text('Cancelar'),
           ),
           ElevatedButton(
-            onPressed: () {
-              _dataManager.deleteSupply(supply['id']);
+            onPressed: () async {
+              final ok = await _dataManager.deleteSupply(supply['id']);
+              if (!context.mounted) return;
               Navigator.of(context).pop();
               ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('Suministro eliminado exitosamente'),
-                  backgroundColor: AppTheme.successColor,
+                SnackBar(
+                  content: Text(ok
+                      ? 'Suministro eliminado exitosamente'
+                      : (_dataManager.lastError ?? 'No se pudo eliminar el suministro')),
+                  backgroundColor: ok ? AppTheme.successColor : AppTheme.errorColor,
+                  duration: Duration(seconds: ok ? 2 : 6),
                 ),
               );
             },
@@ -372,9 +412,9 @@ class _SuppliesScreenState extends State<SuppliesScreen> {
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(Icons.storage, size: 16, color: AppTheme.successColor),
+                Icon(Icons.cloud_done, size: 16, color: AppTheme.successColor),
                 const SizedBox(width: 4),
-                Text('BD Local', style: TextStyle(color: AppTheme.successColor, fontSize: 12, fontWeight: FontWeight.w500)),
+                Text('Supabase', style: TextStyle(color: AppTheme.successColor, fontSize: 12, fontWeight: FontWeight.w500)),
               ],
             ),
           ),
@@ -456,6 +496,7 @@ class _SuppliesScreenState extends State<SuppliesScreen> {
                   )
                 : RefreshIndicator(
                     onRefresh: () async {
+                      await _dataManager.refreshFromCloud();
                       _updateSupplies();
                     },
                     child: ListView.builder(

@@ -47,13 +47,13 @@ class _HomeScreenState extends State<HomeScreen> {
               mainAxisSize: MainAxisSize.min,
               children: [
                 Icon(
-                  Icons.storage,
+                  Icons.cloud_done,
                   size: 16,
                   color: AppTheme.successColor,
                 ),
                 const SizedBox(width: 4),
                 Text(
-                  'BD Local',
+                  'Supabase',
                   style: TextStyle(
                     color: AppTheme.successColor,
                     fontSize: 12,
@@ -67,7 +67,7 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
       body: RefreshIndicator(
         onRefresh: () async {
-          _updateUI();
+          await _dataManager.refreshFromCloud();
         },
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(16),

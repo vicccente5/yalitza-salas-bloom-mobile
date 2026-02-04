@@ -1,8 +1,16 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Permisos necesarios para conectividad -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    
     <application
-        android:label="yalitza_salas_bloom_mobile"
+        android:label="Yalitza Salas"
         android:name="${applicationName}"
-        android:icon="@mipmap/ic_launcher">
+        android:icon="@mipmap/ic_launcher"
+        android:allowBackup="true"
+        android:fullBackupContent="true"
+        android:dataExtractionRules="@xml/data_extraction_rules"
+        android:fullBackupOnly="true">
         <activity
             android:name=".MainActivity"
             android:exported="true"

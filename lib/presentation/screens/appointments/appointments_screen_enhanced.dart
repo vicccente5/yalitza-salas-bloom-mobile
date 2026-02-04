@@ -166,7 +166,7 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> {
               child: const Text('Cancelar'),
             ),
             ElevatedButton(
-              onPressed: () {
+              onPressed: () async {
                 if (selectedClient.value == null ||
                     selectedService.value == null ||
                     selectedHour.value == null ||
@@ -199,7 +199,18 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> {
                   'amount': double.tryParse(amountController.text.trim()) ?? 0.0,
                 };
 
-                _dataManager.addAppointment(newAppointment);
+                final ok = await _dataManager.addAppointment(newAppointment);
+                if (!context.mounted) return;
+                if (!ok) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(_dataManager.lastError ?? 'No se pudo agregar la cita'),
+                      backgroundColor: AppTheme.errorColor,
+                      duration: const Duration(seconds: 6),
+                    ),
+                  );
+                  return;
+                }
 
                 Navigator.of(context).pop();
                 ScaffoldMessenger.of(context).showSnackBar(
@@ -510,9 +521,9 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> {
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(Icons.storage, size: 16, color: AppTheme.successColor),
+                Icon(Icons.cloud_done, size: 16, color: AppTheme.successColor),
                 const SizedBox(width: 4),
-                Text('BD Local', style: TextStyle(color: AppTheme.successColor, fontSize: 12, fontWeight: FontWeight.w500)),
+                Text('Supabase', style: TextStyle(color: AppTheme.successColor, fontSize: 12, fontWeight: FontWeight.w500)),
               ],
             ),
           ),

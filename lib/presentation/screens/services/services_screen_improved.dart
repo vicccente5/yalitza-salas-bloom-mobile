@@ -29,6 +29,167 @@ class _ServicesScreenState extends State<ServicesScreen> {
     if (mounted) setState(() {});
   }
 
+  void _showEditServiceDialog(Map<String, dynamic> service) {
+    final nameController = TextEditingController(text: service['name']?.toString() ?? '');
+    final descriptionController = TextEditingController(text: service['description']?.toString() ?? '');
+    final priceController = TextEditingController(text: service['price']?.toString() ?? '');
+    final durationController = TextEditingController(text: service['duration']?.toString() ?? '');
+    final categoryController = TextEditingController(text: service['category']?.toString() ?? '');
+    final selectedSupplies = <String>{
+      ...((service['supplies'] as List?)?.map((e) => e.toString()) ?? const <String>[]),
+    };
+
+    showDialog(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setState) => AlertDialog(
+          title: const Text('Modificar Servicio'),
+          content: SizedBox(
+            width: MediaQuery.of(context).size.width * 0.8,
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextField(
+                    controller: nameController,
+                    decoration: const InputDecoration(
+                      labelText: 'Nombre del servicio *',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  TextField(
+                    controller: descriptionController,
+                    decoration: const InputDecoration(
+                      labelText: 'Descripción',
+                      border: OutlineInputBorder(),
+                    ),
+                    maxLines: 3,
+                  ),
+                  const SizedBox(height: 16),
+                  TextField(
+                    controller: priceController,
+                    decoration: const InputDecoration(
+                      labelText: 'Precio *',
+                      border: OutlineInputBorder(),
+                    ),
+                    keyboardType: TextInputType.number,
+                  ),
+                  const SizedBox(height: 16),
+                  TextField(
+                    controller: durationController,
+                    decoration: const InputDecoration(
+                      labelText: 'Duración (minutos) *',
+                      border: OutlineInputBorder(),
+                    ),
+                    keyboardType: TextInputType.number,
+                  ),
+                  const SizedBox(height: 16),
+                  DropdownButtonFormField<String>(
+                    value: categoryController.text.isNotEmpty ? categoryController.text : null,
+                    decoration: const InputDecoration(
+                      labelText: 'Categoría *',
+                      border: OutlineInputBorder(),
+                    ),
+                    items: const [
+                      DropdownMenuItem(value: 'Facial', child: Text('Facial')),
+                      DropdownMenuItem(value: 'Corporal', child: Text('Corporal')),
+                      DropdownMenuItem(value: 'Relajante', child: Text('Relajante')),
+                      DropdownMenuItem(value: 'Express', child: Text('Express')),
+                      DropdownMenuItem(value: 'Otro', child: Text('Otro')),
+                    ],
+                    onChanged: (value) {
+                      categoryController.text = value ?? '';
+                    },
+                  ),
+                  const SizedBox(height: 16),
+                  const Text('Suministros utilizados:', style: TextStyle(fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: _dataManager.supplies.map((supply) {
+                      final isSelected = selectedSupplies.contains(supply['name']);
+                      return FilterChip(
+                        label: Text(supply['name']),
+                        selected: isSelected,
+                        onSelected: (selected) {
+                          setState(() {
+                            if (selected) {
+                              selectedSupplies.add(supply['name']);
+                            } else {
+                              selectedSupplies.remove(supply['name']);
+                            }
+                          });
+                        },
+                        selectedColor: AppTheme.primaryColor.withOpacity(0.2),
+                        checkmarkColor: AppTheme.primaryColor,
+                      );
+                    }).toList(),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Cancelar'),
+            ),
+            ElevatedButton(
+              onPressed: () async {
+                if (nameController.text.trim().isEmpty ||
+                    priceController.text.trim().isEmpty ||
+                    durationController.text.trim().isEmpty ||
+                    categoryController.text.trim().isEmpty) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Los campos marcados con * son obligatorios'),
+                      backgroundColor: AppTheme.errorColor,
+                    ),
+                  );
+                  return;
+                }
+
+                final updates = {
+                  'name': nameController.text.trim(),
+                  'description': descriptionController.text.trim(),
+                  'price': double.tryParse(priceController.text.trim()) ?? 0.0,
+                  'duration': int.tryParse(durationController.text.trim()) ?? 0,
+                  'category': categoryController.text.trim(),
+                  'supplies': selectedSupplies.toList(),
+                };
+
+                final ok = await _dataManager.updateService(service['id'], updates);
+                if (!context.mounted) return;
+
+                if (!ok) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(_dataManager.lastError ?? 'No se pudo modificar el servicio'),
+                      backgroundColor: AppTheme.errorColor,
+                      duration: const Duration(seconds: 6),
+                    ),
+                  );
+                  return;
+                }
+
+                Navigator.of(context).pop();
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Servicio modificado exitosamente'),
+                    backgroundColor: AppTheme.successColor,
+                  ),
+                );
+              },
+              child: const Text('Guardar'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   void _showAddServiceDialog() {
     final nameController = TextEditingController();
     final descriptionController = TextEditingController();
@@ -135,7 +296,7 @@ class _ServicesScreenState extends State<ServicesScreen> {
               child: const Text('Cancelar'),
             ),
             ElevatedButton(
-              onPressed: () {
+              onPressed: () async {
                 if (nameController.text.trim().isEmpty ||
                     priceController.text.trim().isEmpty ||
                     durationController.text.trim().isEmpty ||
@@ -160,7 +321,19 @@ class _ServicesScreenState extends State<ServicesScreen> {
                   'supplies': selectedSupplies.toList(),
                 };
 
-                _dataManager.addService(newService);
+                final ok = await _dataManager.addService(newService);
+                if (!context.mounted) return;
+
+                if (!ok) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(_dataManager.lastError ?? 'No se pudo agregar el servicio'),
+                      backgroundColor: AppTheme.errorColor,
+                      duration: const Duration(seconds: 6),
+                    ),
+                  );
+                  return;
+                }
 
                 Navigator.of(context).pop();
                 ScaffoldMessenger.of(context).showSnackBar(
@@ -190,13 +363,17 @@ class _ServicesScreenState extends State<ServicesScreen> {
             child: const Text('Cancelar'),
           ),
           ElevatedButton(
-            onPressed: () {
-              _dataManager.deleteService(service['id']);
+            onPressed: () async {
+              final ok = await _dataManager.deleteService(service['id']);
+              if (!context.mounted) return;
               Navigator.of(context).pop();
               ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('Servicio eliminado exitosamente'),
-                  backgroundColor: AppTheme.successColor,
+                SnackBar(
+                  content: Text(ok
+                      ? 'Servicio eliminado exitosamente'
+                      : (_dataManager.lastError ?? 'No se pudo eliminar el servicio')),
+                  backgroundColor: ok ? AppTheme.successColor : AppTheme.errorColor,
+                  duration: Duration(seconds: ok ? 2 : 6),
                 ),
               );
             },
@@ -237,9 +414,9 @@ class _ServicesScreenState extends State<ServicesScreen> {
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(Icons.storage, size: 16, color: AppTheme.successColor),
+                Icon(Icons.cloud_done, size: 16, color: AppTheme.successColor),
                 const SizedBox(width: 4),
-                Text('BD Local', style: TextStyle(color: AppTheme.successColor, fontSize: 12, fontWeight: FontWeight.w500)),
+                Text('Supabase', style: TextStyle(color: AppTheme.successColor, fontSize: 12, fontWeight: FontWeight.w500)),
               ],
             ),
           ),
@@ -295,10 +472,21 @@ class _ServicesScreenState extends State<ServicesScreen> {
                             PopupMenuButton<String>(
                               onSelected: (value) {
                                 switch (value) {
+                                  case 'edit': _showEditServiceDialog(service); break;
                                   case 'delete': _deleteService(service); break;
                                 }
                               },
                               itemBuilder: (context) => [
+                                const PopupMenuItem(
+                                  value: 'edit',
+                                  child: Row(
+                                    children: [
+                                      Icon(Icons.edit, size: 16),
+                                      SizedBox(width: 8),
+                                      Text('Modificar'),
+                                    ],
+                                  ),
+                                ),
                                 const PopupMenuItem(
                                   value: 'delete',
                                   child: Row(

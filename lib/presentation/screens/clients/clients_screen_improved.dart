@@ -94,7 +94,7 @@ class _ClientsScreenState extends State<ClientsScreen> {
             child: const Text('Cancelar'),
           ),
           ElevatedButton(
-            onPressed: () {
+            onPressed: () async {
               if (nameController.text.trim().isEmpty) {
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(
@@ -113,7 +113,19 @@ class _ClientsScreenState extends State<ClientsScreen> {
                 'createdAt': DateTime.now(),
               };
 
-              _dataManager.addClient(newClient);
+              final ok = await _dataManager.addClient(newClient);
+              if (!context.mounted) return;
+
+              if (!ok) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text(_dataManager.lastError ?? 'No se pudo agregar el cliente'),
+                    backgroundColor: AppTheme.errorColor,
+                    duration: const Duration(seconds: 6),
+                  ),
+                );
+                return;
+              }
 
               Navigator.of(context).pop();
               ScaffoldMessenger.of(context).showSnackBar(
@@ -142,13 +154,17 @@ class _ClientsScreenState extends State<ClientsScreen> {
             child: const Text('Cancelar'),
           ),
           ElevatedButton(
-            onPressed: () {
-              _dataManager.deleteClient(client['id']);
+            onPressed: () async {
+              final ok = await _dataManager.deleteClient(client['id']);
+              if (!context.mounted) return;
               Navigator.of(context).pop();
               ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('Cliente eliminado exitosamente'),
-                  backgroundColor: AppTheme.successColor,
+                SnackBar(
+                  content: Text(ok
+                      ? 'Cliente eliminado exitosamente'
+                      : (_dataManager.lastError ?? 'No se pudo eliminar el cliente')),
+                  backgroundColor: ok ? AppTheme.successColor : AppTheme.errorColor,
+                  duration: Duration(seconds: ok ? 2 : 6),
                 ),
               );
             },
@@ -180,13 +196,13 @@ class _ClientsScreenState extends State<ClientsScreen> {
               mainAxisSize: MainAxisSize.min,
               children: [
                 Icon(
-                  Icons.storage,
+                  Icons.cloud_done,
                   size: 16,
                   color: AppTheme.successColor,
                 ),
                 const SizedBox(width: 4),
                 Text(
-                  'BD Local',
+                  'Supabase',
                   style: TextStyle(
                     color: AppTheme.successColor,
                     fontSize: 12,

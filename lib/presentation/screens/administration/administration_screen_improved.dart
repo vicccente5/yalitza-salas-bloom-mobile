@@ -189,9 +189,9 @@ class _AdministrationScreenState extends State<AdministrationScreen> {
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(Icons.admin_panel_settings, size: 16, color: AppTheme.successColor),
+                Icon(Icons.cloud_done, size: 16, color: AppTheme.successColor),
                 const SizedBox(width: 4),
-                Text('BD Local', style: TextStyle(color: AppTheme.successColor, fontSize: 12, fontWeight: FontWeight.w500)),
+                Text('Supabase', style: TextStyle(color: AppTheme.successColor, fontSize: 12, fontWeight: FontWeight.w500)),
               ],
             ),
           ),
