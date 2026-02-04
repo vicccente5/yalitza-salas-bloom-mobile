@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'presentation/app/app_improved.dart';
+import 'presentation/app/app_persistent.dart';
 import 'data/models/data_manager.dart';
 
 void main() async {
