@@ -1,197 +1,128 @@
 import 'package:flutter/material.dart';
+import 'dart:convert';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class DataManager {
   static final DataManager _instance = DataManager._internal();
   factory DataManager() => _instance;
   DataManager._internal();
 
-  final List<Map<String, dynamic>> _clients = [
-    {
-      'id': 1,
-      'name': 'Valeska Moreno Salas',
-      'phone': '3001234567',
-      'email': 'valeska@email.com',
-      'createdAt': DateTime.now().subtract(const Duration(days: 30)),
-    },
-    {
-      'id': 2,
-      'name': 'María González',
-      'phone': '3109876543',
-      'email': 'maria@email.com',
-      'createdAt': DateTime.now().subtract(const Duration(days: 15)),
-    },
-    {
-      'id': 3,
-      'name': 'Ana Martínez',
-      'phone': '3155551234',
-      'email': 'ana@email.com',
-      'createdAt': DateTime.now().subtract(const Duration(days: 7)),
-    },
-  ];
+  final List<Map<String, dynamic>> _clients = [];
+  final List<Map<String, dynamic>> _services = [];
+  final List<Map<String, dynamic>> _supplies = [];
+  final List<Map<String, dynamic>> _appointments = [];
+  final List<Map<String, dynamic>> _completedAppointments = [];
 
-  final List<Map<String, dynamic>> _services = [
-    {
-      'id': 1,
-      'name': 'Depilación Facial',
-      'description': 'Tratamiento completo con productos de alta calidad',
-      'price': 25000.0,
-      'duration': 60,
-      'category': 'Facial',
-      'createdAt': DateTime.now().subtract(const Duration(days: 30)),
-      'supplies': ['Cera Depilatoria', 'Productos Faciales'],
-    },
-    {
-      'id': 2,
-      'name': 'Masaje Relajante',
-      'description': 'Sesión completa con aceites esenciales',
-      'price': 18000.0,
-      'duration': 45,
-      'category': 'Relajante',
-      'createdAt': DateTime.now().subtract(const Duration(days: 20)),
-      'supplies': ['Aceites Esenciales', 'Toallas de Masaje'],
-    },
-    {
-      'id': 3,
-      'name': 'Limpieza de Pestañas',
-      'description': 'Servicio rápido de mantenimiento',
-      'price': 15000.0,
-      'duration': 30,
-      'category': 'Express',
-      'createdAt': DateTime.now().subtract(const Duration(days: 15)),
-      'supplies': ['Guantes Desechables'],
-    },
-    {
-      'id': 4,
-      'name': 'Tratamiento Corporal',
-      'description': 'Exfoliación completa del cuerpo',
-      'price': 35000.0,
-      'duration': 90,
-      'category': 'Corporal',
-      'createdAt': DateTime.now().subtract(const Duration(days: 10)),
-      'supplies': ['Productos Faciales', 'Toallas de Masaje'],
-    },
-    {
-      'id': 5,
-      'name': 'Peeling Químico',
-      'description': 'Renovación celular profunda',
-      'price': 28000.0,
-      'duration': 75,
-      'category': 'Facial',
-      'createdAt': DateTime.now().subtract(const Duration(days: 5)),
-      'supplies': ['Productos Faciales', 'Guantes Desechables'],
-    },
-  ];
-
-  final List<Map<String, dynamic>> _supplies = [
-    {
-      'id': 1,
-      'name': 'Cera Depilatoria',
-      'unitCost': 5000.0,
-      'unit': 'kg',
-      'currentStock': 15.0,
-      'minimumStock': 2.0,
-      'createdAt': DateTime.now().subtract(const Duration(days: 30)),
-    },
-    {
-      'id': 2,
-      'name': 'Aceites Esenciales',
-      'unitCost': 8000.0,
-      'unit': 'ml',
-      'currentStock': 8.0,
-      'minimumStock': 10.0,
-      'createdAt': DateTime.now().subtract(const Duration(days: 20)),
-    },
-    {
-      'id': 3,
-      'name': 'Toallas de Masaje',
-      'unitCost': 3000.0,
-      'unit': 'unidades',
-      'currentStock': 20.0,
-      'minimumStock': 5.0,
-      'createdAt': DateTime.now().subtract(const Duration(days: 15)),
-    },
-    {
-      'id': 4,
-      'name': 'Productos Faciales',
-      'unitCost': 12000.0,
-      'unit': 'ml',
-      'currentStock': 25.0,
-      'minimumStock': 8.0,
-      'createdAt': DateTime.now().subtract(const Duration(days: 10)),
-    },
-    {
-      'id': 5,
-      'name': 'Guantes Desechables',
-      'unitCost': 500.0,
-      'unit': 'unidades',
-      'currentStock': 3.0,
-      'minimumStock': 10.0,
-      'createdAt': DateTime.now().subtract(const Duration(days: 5)),
-    },
-  ];
-
-  final List<Map<String, dynamic>> _appointments = [
-    {
-      'id': 1,
-      'clientName': 'Valeska Moreno Salas',
-      'serviceName': 'Depilación Facial',
-      'dateTime': DateTime.now().add(const Duration(hours: 2)),
-      'status': 'scheduled',
-      'amount': 25000.0,
-    },
-    {
-      'id': 2,
-      'clientName': 'María González',
-      'serviceName': 'Masaje Relajante',
-      'dateTime': DateTime.now().add(const Duration(hours: 4)),
-      'status': 'scheduled',
-      'amount': 18000.0,
-    },
-    {
-      'id': 3,
-      'clientName': 'Ana Martínez',
-      'serviceName': 'Limpieza de Pestañas',
-      'dateTime': DateTime.now().subtract(const Duration(hours: 1)),
-      'status': 'completed',
-      'amount': 15000.0,
-    },
-  ];
-
-  final List<Map<String, dynamic>> _completedAppointments = [
-    {
-      'id': 1,
-      'clientName': 'Valeska Moreno Salas',
-      'serviceName': 'Depilación Facial',
-      'dateTime': DateTime.now().subtract(const Duration(hours: 2)),
-      'amount': 25000.0,
-      'status': 'completed',
-      'notes': 'Cliente satisfecho, servicio completado exitosamente',
-    },
-    {
-      'id': 2,
-      'clientName': 'María González',
-      'serviceName': 'Masaje Relajante',
-      'dateTime': DateTime.now().subtract(const Duration(days: 1)),
-      'amount': 18000.0,
-      'status': 'completed',
-      'notes': 'Excelente respuesta del cliente',
-    },
-    {
-      'id': 3,
-      'clientName': 'Ana Martínez',
-      'serviceName': 'Limpieza de Pestañas',
-      'dateTime': DateTime.now().subtract(const Duration(days: 2)),
-      'amount': 15000.0,
-      'status': 'completed',
-      'notes': 'Servicio rápido y eficiente',
-    },
-  ];
-
-  double _monthlyIncome = 150000.0;
-  double _monthlyCosts = 30000.0;
-  double _monthlyProfit = 120000.0;
+  double _monthlyIncome = 0.0;
+  double _monthlyCosts = 0.0;
+  double _monthlyProfit = 0.0;
 
   final List<VoidCallback> _listeners = [];
+
+  Future<void> _loadData() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      
+      // Load clients
+      final clientsJson = prefs.getString('clients');
+      if (clientsJson != null) {
+        final clientsList = json.decode(clientsJson) as List;
+        _clients.clear();
+        _clients.addAll(clientsList.map((e) => Map<String, dynamic>.from(e)));
+      }
+      
+      // Load services
+      final servicesJson = prefs.getString('services');
+      if (servicesJson != null) {
+        final servicesList = json.decode(servicesJson) as List;
+        _services.clear();
+        _services.addAll(servicesList.map((e) => Map<String, dynamic>.from(e)));
+      }
+      
+      // Load supplies
+      final suppliesJson = prefs.getString('supplies');
+      if (suppliesJson != null) {
+        final suppliesList = json.decode(suppliesJson) as List;
+        _supplies.clear();
+        _supplies.addAll(suppliesList.map((e) => Map<String, dynamic>.from(e)));
+      }
+      
+      // Load appointments
+      final appointmentsJson = prefs.getString('appointments');
+      if (appointmentsJson != null) {
+        final appointmentsList = json.decode(appointmentsJson) as List;
+        _appointments.clear();
+        _appointments.addAll(appointmentsList.map((e) {
+          final appointment = Map<String, dynamic>.from(e);
+          appointment['dateTime'] = DateTime.parse(appointment['dateTime']);
+          return appointment;
+        }));
+      }
+      
+      // Load completed appointments
+      final completedAppointmentsJson = prefs.getString('completedAppointments');
+      if (completedAppointmentsJson != null) {
+        final completedAppointmentsList = json.decode(completedAppointmentsJson) as List;
+        _completedAppointments.clear();
+        _completedAppointments.addAll(completedAppointmentsList.map((e) {
+          final appointment = Map<String, dynamic>.from(e);
+          appointment['dateTime'] = DateTime.parse(appointment['dateTime']);
+          return appointment;
+        }));
+      }
+      
+      // Load financial data
+      _monthlyIncome = prefs.getDouble('monthlyIncome') ?? 0.0;
+      _monthlyCosts = prefs.getDouble('monthlyCosts') ?? 0.0;
+      _monthlyProfit = prefs.getDouble('monthlyProfit') ?? 0.0;
+      
+      _notifyListeners();
+    } catch (e) {
+      print('Error loading data: $e');
+    }
+  }
+
+  Future<void> _saveData() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      
+      // Save clients
+      await prefs.setString('clients', json.encode(_clients));
+      
+      // Save services
+      await prefs.setString('services', json.encode(_services));
+      
+      // Save supplies
+      await prefs.setString('supplies', json.encode(_supplies));
+      
+      // Save appointments
+      final appointmentsJson = _appointments.map((e) {
+        final appointment = Map<String, dynamic>.from(e);
+        appointment['dateTime'] = (appointment['dateTime'] as DateTime).toIso8601String();
+        return appointment;
+      }).toList();
+      await prefs.setString('appointments', json.encode(appointmentsJson));
+      
+      // Save completed appointments
+      final completedAppointmentsJson = _completedAppointments.map((e) {
+        final appointment = Map<String, dynamic>.from(e);
+        appointment['dateTime'] = (appointment['dateTime'] as DateTime).toIso8601String();
+        return appointment;
+      }).toList();
+      await prefs.setString('completedAppointments', json.encode(completedAppointmentsJson));
+      
+      // Save financial data
+      await prefs.setDouble('monthlyIncome', _monthlyIncome);
+      await prefs.setDouble('monthlyCosts', _monthlyCosts);
+      await prefs.setDouble('monthlyProfit', _monthlyProfit);
+    } catch (e) {
+      print('Error saving data: $e');
+    }
+  }
+
+  Future<void> initializeData() async {
+    await _loadData();
+  }
 
   void addListener(VoidCallback listener) {
     _listeners.add(listener);
@@ -205,6 +136,13 @@ class DataManager {
     for (final listener in _listeners) {
       listener();
     }
+    // Guardar datos de forma asíncrona sin bloquear la UI
+    _saveData();
+  }
+
+  // Método público para forzar guardado manual
+  Future<void> forceSaveData() async {
+    await _saveData();
   }
 
   // Getters
@@ -282,6 +220,14 @@ class DataManager {
         _monthlyProfit -= _appointments[index]['amount'];
       }
       
+      _notifyListeners();
+    }
+  }
+
+  void updateAppointment(int id, Map<String, dynamic> updates) {
+    final index = _appointments.indexWhere((appointment) => appointment['id'] == id);
+    if (index != -1) {
+      _appointments[index] = {..._appointments[index], ...updates};
       _notifyListeners();
     }
   }

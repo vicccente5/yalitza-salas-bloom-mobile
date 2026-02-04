@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
 import '../screens/dashboard/home_screen.dart';
 import '../screens/clients/clients_screen_improved.dart';
-import '../screens/appointments/appointments_screen_improved.dart';
+import '../screens/appointments/appointments_screen_enhanced.dart';
 import '../screens/services/services_screen_improved.dart';
 import '../screens/supplies/supplies_screen_improved.dart';
 import '../screens/administration/administration_screen_improved.dart';

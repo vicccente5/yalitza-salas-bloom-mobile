@@ -1,6 +1,13 @@
 import 'package:flutter/material.dart';
 import 'presentation/app/app_improved.dart';
+import 'data/models/data_manager.dart';
 
-void main() {
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  
+  // Initialize data manager and load saved data
+  final dataManager = DataManager();
+  await dataManager.initializeData();
+  
   runApp(const App());
 }
