@@ -21,6 +21,8 @@ class DataManager {
   String? _appointmentsTable;
   String? _completedAppointmentsTable;
   String? _financialTable;
+  String? _expensesTable;
+  String? _expenseCategoriesTable;
 
   String? _lastError;
   String? get lastError => _lastError;
@@ -30,10 +32,27 @@ class DataManager {
   final List<Map<String, dynamic>> _supplies = [];
   final List<Map<String, dynamic>> _appointments = [];
   final List<Map<String, dynamic>> _completedAppointments = [];
+  final List<Map<String, dynamic>> _expenses = [];
+  final List<Map<String, dynamic>> _expenseCategories = [];
 
   double _monthlyIncome = 0.0;
   double _monthlyCosts = 0.0;
   double _monthlyProfit = 0.0;
+  
+  // Gastos categorizados del mes actual
+  double _casaExpenses = 0.0;
+  double _luzExpenses = 0.0;
+  double _aguaExpenses = 0.0;
+  double _telefonoInternetExpenses = 0.0;
+  double _materialesBellezaExpenses = 0.0;
+  double _suministrosExpenses = 0.0;
+  double _marketingExpenses = 0.0;
+  double _transporteExpenses = 0.0;
+  double _segurosExpenses = 0.0;
+  double _impuestosExpenses = 0.0;
+  double _mantenimientoExpenses = 0.0;
+  double _otrosExpenses = 0.0;
+  double _totalMonthlyExpenses = 0.0;
 
   final List<VoidCallback> _listeners = [];
 
@@ -83,6 +102,8 @@ class DataManager {
       _appointmentsTable = await resolve(['appointments', 'citas', 'bookings', 'reservations']);
       _completedAppointmentsTable = await resolve(['completed_appointments', 'citas_completadas', 'completed_bookings']);
       _financialTable = await resolve(['financial_data', 'finanzas', 'financial', 'datos_financieros']);
+      _expensesTable = await resolve(['expenses', 'gastos', 'costos', 'egresos']);
+      _expenseCategoriesTable = await resolve(['expense_categories', 'categorias_gastos', 'gastos_categorias']);
 
       _clientsTable ??= 'clients';
       _servicesTable ??= 'services';
@@ -90,6 +111,8 @@ class DataManager {
       _appointmentsTable ??= 'appointments';
       _completedAppointmentsTable ??= 'completed_appointments';
       _financialTable ??= 'financial_data';
+      _expensesTable ??= 'expenses';
+      _expenseCategoriesTable ??= 'expense_categories';
 
       _schemaResolved = true;
     }();
@@ -136,14 +159,30 @@ class DataManager {
     List<Map<String, dynamic>> candidates,
   ) async {
     Object? last;
-    for (final data in candidates) {
+    Map<String, dynamic>? lastData;
+    
+    for (int i = 0; i < candidates.length; i++) {
+      final data = candidates[i];
       try {
+        print('DEBUG: Intentando insertar en tabla $table con datos: $data');
         final inserted = await _supabase.from(table).insert(data).select('*').single();
+        print('DEBUG: Inserción exitosa: $inserted');
         return Map<String, dynamic>.from(inserted);
       } catch (e) {
+        print('DEBUG: Error en inserción $i: $e');
+        print('DEBUG: Tipo de error: ${e.runtimeType}');
         last = e;
+        lastData = data;
+        
+        // Si es el último intento, lanzar el error
+        if (i == candidates.length - 1) {
+          print('DEBUG: Todos los intentos fallaron, lanzando error final');
+          throw last ?? Exception('Insert failed after ${candidates.length} attempts');
+        }
       }
     }
+    
+    // Esto no debería alcanzarse nunca
     throw last ?? Exception('Insert failed');
   }
 
@@ -247,6 +286,35 @@ class DataManager {
     };
   }
 
+  Map<String, dynamic> _mapExpenseFromDb(Map<String, dynamic> row) {
+    final createdAtRaw = row['created_at'] ?? row['createdAt'];
+    return {
+      'id': row['id'],
+      'description': row['description'] ?? row['descripcion'] ?? '',
+      'amount': _asDouble(row['amount'] ?? row['monto'] ?? 0),
+      'category': row['category'] ?? row['categoria'] ?? 'Otros',
+      'date': _asDateTime(row['date'] ?? row['fecha']),
+      'createdAt': _asDateTime(createdAtRaw),
+      'updatedAt': _asDateTime(row['updated_at'] ?? row['updatedAt'] ?? createdAtRaw),
+      'notes': row['notes'] ?? row['notas'] ?? '',
+      'receiptUrl': row['receipt_url'] ?? row['receiptUrl'] ?? '',
+      'isMonthly': row['is_monthly'] ?? row['isMonthly'] ?? false,
+    };
+  }
+
+  Map<String, dynamic> _mapExpenseCategoryFromDb(Map<String, dynamic> row) {
+    final createdAtRaw = row['created_at'] ?? row['createdAt'];
+    return {
+      'id': row['id'],
+      'name': row['name'] ?? row['nombre'] ?? '',
+      'description': row['description'] ?? row['descripcion'] ?? '',
+      'color': row['color'] ?? '#6366f1',
+      'icon': row['icon'] ?? 'receipt',
+      'isActive': row['is_active'] ?? row['isActive'] ?? true,
+      'createdAt': _asDateTime(createdAtRaw),
+    };
+  }
+
   Future<void> _loadFromSupabase() async {
     await _ensureInitialized();
     await _ensureSchemaResolved();
@@ -334,7 +402,121 @@ class DataManager {
       print('ERROR loading financial data from Supabase: $e');
     }
 
+    // Cargar categorías de gastos
+    try {
+      final categoriesRows = await _selectAllWithOrderFallback(
+        _expenseCategoriesTable!,
+        orderColumn: 'name',
+        ascending: true,
+      );
+      _expenseCategories
+        ..clear()
+        ..addAll((categoriesRows as List).map((e) => _mapExpenseCategoryFromDb(Map<String, dynamic>.from(e))));
+      print('DEBUG: Supabase expense categories loaded: ${_expenseCategories.length}');
+    } catch (e) {
+      print('ERROR loading expense categories from Supabase: $e');
+    }
+
+    // Cargar gastos
+    try {
+      final expensesRows = await _selectAllWithOrderFallback(
+        _expensesTable!,
+        orderColumn: 'date',
+        ascending: false,
+      );
+      _expenses
+        ..clear()
+        ..addAll((expensesRows as List).map((e) => _mapExpenseFromDb(Map<String, dynamic>.from(e))));
+      print('DEBUG: Supabase expenses loaded: ${_expenses.length}');
+      
+      // Calcular gastos por categoría del mes actual
+      _calculateMonthlyExpensesByCategory();
+    } catch (e) {
+      print('ERROR loading expenses from Supabase: $e');
+    }
+
     _notifyListeners();
+  }
+
+  void _calculateMonthlyExpensesByCategory() {
+    final now = DateTime.now();
+    final currentMonth = DateTime(now.year, now.month, 1);
+    final nextMonth = DateTime(now.year, now.month + 1, 1);
+
+    // Resetear contadores
+    _casaExpenses = 0.0;
+    _luzExpenses = 0.0;
+    _aguaExpenses = 0.0;
+    _telefonoInternetExpenses = 0.0;
+    _materialesBellezaExpenses = 0.0;
+    _suministrosExpenses = 0.0;
+    _marketingExpenses = 0.0;
+    _transporteExpenses = 0.0;
+    _segurosExpenses = 0.0;
+    _impuestosExpenses = 0.0;
+    _mantenimientoExpenses = 0.0;
+    _otrosExpenses = 0.0;
+    _totalMonthlyExpenses = 0.0;
+
+    // Calcular gastos del mes actual por categoría
+    for (final expense in _expenses) {
+      final expenseDate = expense['date'] as DateTime;
+      if (expenseDate.isAfter(currentMonth.subtract(const Duration(days: 1))) && 
+          expenseDate.isBefore(nextMonth)) {
+        
+        final amount = expense['amount'] as double;
+        final category = expense['category'] as String;
+        
+        switch (category.toLowerCase()) {
+          case 'casa':
+            _casaExpenses += amount;
+            break;
+          case 'luz':
+            _luzExpenses += amount;
+            break;
+          case 'agua':
+            _aguaExpenses += amount;
+            break;
+          case 'teléfono/internet':
+          case 'telefono/internet':
+          case 'telefono_internet':
+            _telefonoInternetExpenses += amount;
+            break;
+          case 'materiales de belleza':
+          case 'materiales_belleza':
+            _materialesBellezaExpenses += amount;
+            break;
+          case 'suministros':
+            _suministrosExpenses += amount;
+            break;
+          case 'marketing':
+            _marketingExpenses += amount;
+            break;
+          case 'transporte':
+            _transporteExpenses += amount;
+            break;
+          case 'seguros':
+            _segurosExpenses += amount;
+            break;
+          case 'impuestos':
+            _impuestosExpenses += amount;
+            break;
+          case 'mantenimiento':
+            _mantenimientoExpenses += amount;
+            break;
+          default:
+            _otrosExpenses += amount;
+            break;
+        }
+        
+        _totalMonthlyExpenses += amount;
+      }
+    }
+    
+    // Recalcular ganancia con los gastos categorizados
+    _monthlyProfit = _monthlyIncome - _totalMonthlyExpenses;
+    
+    print('DEBUG: Monthly expenses calculated - Total: $_totalMonthlyExpenses');
   }
 
   Future<void> initializeData() async {
@@ -373,9 +555,26 @@ class DataManager {
   List<Map<String, dynamic>> get supplies => List.from(_supplies);
   List<Map<String, dynamic>> get appointments => List.from(_appointments);
   List<Map<String, dynamic>> get completedAppointments => List.from(_completedAppointments);
+  List<Map<String, dynamic>> get expenses => List.from(_expenses);
+  List<Map<String, dynamic>> get expenseCategories => List.from(_expenseCategories);
   double get monthlyIncome => _monthlyIncome;
   double get monthlyCosts => _monthlyCosts;
   double get monthlyProfit => _monthlyProfit;
+  
+  // Getters para gastos categorizados
+  double get casaExpenses => _casaExpenses;
+  double get luzExpenses => _luzExpenses;
+  double get aguaExpenses => _aguaExpenses;
+  double get telefonoInternetExpenses => _telefonoInternetExpenses;
+  double get materialesBellezaExpenses => _materialesBellezaExpenses;
+  double get suministrosExpenses => _suministrosExpenses;
+  double get marketingExpenses => _marketingExpenses;
+  double get transporteExpenses => _transporteExpenses;
+  double get segurosExpenses => _segurosExpenses;
+  double get impuestosExpenses => _impuestosExpenses;
+  double get mantenimientoExpenses => _mantenimientoExpenses;
+  double get otrosExpenses => _otrosExpenses;
+  double get totalMonthlyExpenses => _totalMonthlyExpenses;
 
   // Client operations
   Future<bool> addClient(Map<String, dynamic> client) async {
@@ -882,5 +1081,180 @@ class DataManager {
       }
     }
     return hours;
+  }
+
+  // Expense operations
+  Future<bool> addExpense(Map<String, dynamic> expense) async {
+    await _ensureInitialized();
+    await _ensureSchemaResolved();
+    _lastError = null;
+    
+    print('DEBUG: Intentando agregar gasto: $expense');
+    
+    try {
+      final dataEs = {
+        'descripcion': expense['description'] ?? '',
+        'monto': expense['amount'] ?? 0,
+        'categoria': expense['category'] ?? '',
+        'fecha': (expense['date'] as DateTime).toIso8601String(),
+        'notas': expense['notes'] ?? '',
+        'receipt_url': expense['receiptUrl'] ?? '',
+        'is_monthly': expense['isMonthly'] ?? false,
+      };
+
+      final dataEn = {
+        'description': expense['description'] ?? '',
+        'amount': expense['amount'] ?? 0,
+        'category': expense['category'] ?? '',
+        'date': (expense['date'] as DateTime).toIso8601String(),
+        'notes': expense['notes'] ?? '',
+        'receipt_url': expense['receiptUrl'] ?? '',
+        'is_monthly': expense['isMonthly'] ?? false,
+      };
+
+      print('DEBUG: Enviando a Supabase - ES: $dataEs');
+      print('DEBUG: Enviando a Supabase - EN: $dataEn');
+      print('DEBUG: Tabla de gastos: $_expensesTable');
+
+      // Enviar directamente los datos en español, sin fallback por ahora
+      try {
+        print('DEBUG: Insertando directo en tabla $_expensesTable');
+        final inserted = await _supabase.from(_expensesTable!).insert(dataEs).select('*').single();
+        print('DEBUG: Inserción directa exitosa: $inserted');
+        _expenses.insert(0, _mapExpenseFromDb(Map<String, dynamic>.from(inserted)));
+        _calculateMonthlyExpensesByCategory();
+        _notifyListeners();
+        print('DEBUG: Gasto agregado exitosamente');
+        return true;
+      } catch (e) {
+        print('ERROR en inserción directa: $e');
+        print('DEBUG: Tipo de error: ${e.runtimeType}');
+        
+        // Si falla inserción directa, intentar con fallback
+        try {
+          print('DEBUG: Intentando fallback con inglés');
+          final insertedFallback = await _supabase.from(_expensesTable!).insert(dataEn).select('*').single();
+          print('DEBUG: Inserción fallback exitosa: $insertedFallback');
+          _expenses.insert(0, _mapExpenseFromDb(Map<String, dynamic>.from(insertedFallback)));
+          _calculateMonthlyExpensesByCategory();
+          _notifyListeners();
+          print('DEBUG: Gasto agregado exitosamente (fallback)');
+          return true;
+        } catch (fallbackError) {
+          print('ERROR en fallback: $fallbackError');
+          _setError(fallbackError);
+          return false;
+        }
+      }
+    } catch (e) {
+      print('ERROR en addExpense: $e');
+      _setError(e);
+      return false;
+    }
+  }
+
+  Future<bool> updateExpense(Object id, Map<String, dynamic> updates) async {
+    await _ensureInitialized();
+    await _ensureSchemaResolved();
+    _lastError = null;
+
+    final data = <String, dynamic>{};
+    if (updates.containsKey('description')) data['description'] = updates['description'];
+    if (updates.containsKey('amount')) data['amount'] = updates['amount'];
+    if (updates.containsKey('category')) data['category'] = updates['category'];
+    if (updates.containsKey('date')) data['date'] = (updates['date'] as DateTime).toIso8601String();
+    if (updates.containsKey('notes')) data['notes'] = updates['notes'];
+    if (updates.containsKey('receiptUrl')) data['receipt_url'] = updates['receiptUrl'];
+    if (updates.containsKey('isMonthly')) data['is_monthly'] = updates['isMonthly'];
+
+    if (data.isEmpty) return true;
+
+    try {
+      final dataEs = <String, dynamic>{};
+      if (updates.containsKey('description')) dataEs['descripcion'] = updates['description'];
+      if (updates.containsKey('amount')) dataEs['monto'] = updates['amount'];
+      if (updates.containsKey('category')) dataEs['categoria'] = updates['category'];
+      if (updates.containsKey('date')) dataEs['fecha'] = (updates['date'] as DateTime).toIso8601String();
+      if (updates.containsKey('notes')) dataEs['notas'] = updates['notes'];
+      if (updates.containsKey('receiptUrl')) dataEs['receipt_url'] = updates['receiptUrl'];
+      if (updates.containsKey('isMonthly')) dataEs['is_monthly'] = updates['isMonthly'];
+
+      final updated = await _updateSingleWithFallback(_expensesTable!, id, [data, dataEs]);
+      final index = _expenses.indexWhere((e) => e['id'] == id);
+      if (index != -1) {
+        _expenses[index] = _mapExpenseFromDb(Map<String, dynamic>.from(updated));
+        _calculateMonthlyExpensesByCategory();
+        _notifyListeners();
+      }
+      return true;
+    } catch (e) {
+      _setError(e);
+      return false;
+    }
+  }
+
+  Future<bool> deleteExpense(Object id) async {
+    await _ensureInitialized();
+    await _ensureSchemaResolved();
+    _lastError = null;
+    try {
+      await _supabase.from(_expensesTable!).delete().eq('id', id);
+      _expenses.removeWhere((e) => e['id'] == id);
+      _calculateMonthlyExpensesByCategory();
+      _notifyListeners();
+      return true;
+    } catch (e) {
+      _setError(e);
+      return false;
+    }
+  }
+
+  // Expense categories operations
+  Future<bool> addExpenseCategory(Map<String, dynamic> category) async {
+    await _ensureInitialized();
+    await _ensureSchemaResolved();
+    _lastError = null;
+    try {
+      final dataEn = {
+        'name': category['name'],
+        'description': category['description'] ?? '',
+        'color': category['color'] ?? '#6366f1',
+        'icon': category['icon'] ?? 'receipt',
+        'is_active': category['isActive'] ?? true,
+      };
+
+      final dataEs = {
+        'nombre': category['name'],
+        'descripcion': category['description'] ?? '',
+        'color': category['color'] ?? '#6366f1',
+        'icono': category['icon'] ?? 'receipt',
+        'is_active': category['isActive'] ?? true,
+      };
+
+      final inserted = await _insertSingleWithFallback(_expenseCategoriesTable!, [dataEn, dataEs]);
+      _expenseCategories.insert(0, _mapExpenseCategoryFromDb(Map<String, dynamic>.from(inserted)));
+      _notifyListeners();
+      return true;
+    } catch (e) {
+      _setError(e);
+      return false;
+    }
+  }
+
+  List<Map<String, dynamic>> getExpensesForMonth(DateTime month) {
+    final startOfMonth = DateTime(month.year, month.month, 1);
+    final endOfMonth = DateTime(month.year, month.month + 1, 1).subtract(const Duration(days: 1));
+    
+    return _expenses.where((expense) {
+      final expenseDate = expense['date'] as DateTime;
+      return expenseDate.isAfter(startOfMonth.subtract(const Duration(days: 1))) &&
+             expenseDate.isBefore(endOfMonth.add(const Duration(days: 1)));
+    }).toList();
+  }
+
+  List<Map<String, dynamic>> getExpensesByCategory(String category) {
+    return _expenses.where((expense) => 
+      expense['category'].toString().toLowerCase() == category.toLowerCase()
+    ).toList();
   }
 }

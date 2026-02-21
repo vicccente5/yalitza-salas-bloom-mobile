@@ -12,90 +12,65 @@ class AdministrationScreen extends StatefulWidget {
 
 class _AdministrationScreenState extends State<AdministrationScreen> {
   final DataManager _dataManager = DataManager();
-  final TextEditingController _incomeController = TextEditingController();
-  final TextEditingController _costsController = TextEditingController();
 
   @override
   void initState() {
     super.initState();
-    _incomeController.text = _dataManager.monthlyIncome.toString();
-    _costsController.text = _dataManager.monthlyCosts.toString();
     _dataManager.addListener(_updateUI);
   }
 
   @override
   void dispose() {
     _dataManager.removeListener(_updateUI);
-    _incomeController.dispose();
-    _costsController.dispose();
     super.dispose();
   }
 
   void _updateUI() {
     if (mounted) {
       setState(() {
-        _incomeController.text = _dataManager.monthlyIncome.toString();
-        _costsController.text = _dataManager.monthlyCosts.toString();
+        // Actualizar cualquier estado necesario
       });
     }
   }
 
-  void _showEditFinancialDialog() {
-    final incomeController = TextEditingController(text: _dataManager.monthlyIncome.toString());
-    final costsController = TextEditingController(text: _dataManager.monthlyCosts.toString());
+  void _editCompletedAppointment(Map<String, dynamic> appointment) {
+    final incomeController = TextEditingController(text: appointment['income']?.toString() ?? '0');
+    final costController = TextEditingController(text: appointment['cost']?.toString() ?? '0');
 
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Editar Datos Financieros'),
+        title: const Text('Ver Detalles de Cita Completada'),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            TextField(
-              controller: incomeController,
-              decoration: const InputDecoration(
-                labelText: 'Ingresos del mes',
-                border: OutlineInputBorder(),
-                prefixText: '\$',
-              ),
-              keyboardType: TextInputType.number,
+            Text(
+              'Cliente: ${appointment['clientName'] ?? 'Sin nombre'}',
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Servicio: ${appointment['serviceName'] ?? 'Sin servicio'}',
+              style: Theme.of(context).textTheme.bodyMedium,
             ),
             const SizedBox(height: 16),
-            TextField(
-              controller: costsController,
-              decoration: const InputDecoration(
-                labelText: 'Costos del mes',
-                border: OutlineInputBorder(),
-                prefixText: '\$',
-              ),
-              keyboardType: TextInputType.number,
+            Text(
+              'Ingreso: ${NumberFormat.currency(symbol: '\$').format(appointment['income'] ?? 0)}',
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: AppTheme.successColor),
             ),
-            const SizedBox(height: 16),
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: Colors.grey.shade100,
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Row(
-                children: [
-                  Text(
-                    'Ganancia estimada: ',
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                  Text(
-                    NumberFormat.currency(symbol: '\$', decimalDigits: 2).format(
-                      (double.tryParse(incomeController.text) ?? 0) - 
-                      (double.tryParse(costsController.text) ?? 0)
-                    ),
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      color: AppTheme.primaryColor,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ],
+            const SizedBox(height: 8),
+            Text(
+              'Costo: ${NumberFormat.currency(symbol: '\$').format(appointment['cost'] ?? 0)}',
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: AppTheme.errorColor),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Ganancia: ${NumberFormat.currency(symbol: '\$').format((appointment['income'] ?? 0) - (appointment['cost'] ?? 0))}',
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                color: (appointment['income'] ?? 0) > (appointment['cost'] ?? 0) 
+                  ? AppTheme.successColor 
+                  : AppTheme.errorColor,
+                fontWeight: FontWeight.bold,
               ),
             ),
           ],
@@ -103,34 +78,7 @@ class _AdministrationScreenState extends State<AdministrationScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Cancelar'),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              final income = double.tryParse(incomeController.text);
-              final costs = double.tryParse(costsController.text);
-              
-              if (income == null || costs == null) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Ingresa valores numéricos válidos'),
-                    backgroundColor: AppTheme.errorColor,
-                  ),
-                );
-                return;
-              }
-
-              _dataManager.updateFinancialData(income: income, costs: costs);
-
-              Navigator.of(context).pop();
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('Datos financieros actualizados exitosamente'),
-                  backgroundColor: AppTheme.successColor,
-                ),
-              );
-            },
-            child: const Text('Guardar'),
+            child: const Text('Cerrar'),
           ),
         ],
       ),
@@ -143,8 +91,8 @@ class _AdministrationScreenState extends State<AdministrationScreen> {
       builder: (context) => AlertDialog(
         title: const Text('Eliminar Cita Completada'),
         content: Text(
-          '¿Estás seguro de que deseas eliminar la cita completada de ${appointment['clientName']}?\n\n'
-          'Esto afectará las ganancias del mes y no se podrá deshacer.'
+          '¿Estás seguro de que deseas eliminar la cita completada del cliente "${appointment['clientName']}"?\n\n'
+          'Esta acción no se podrá deshacer.'
         ),
         actions: [
           TextButton(
@@ -157,7 +105,7 @@ class _AdministrationScreenState extends State<AdministrationScreen> {
               Navigator.of(context).pop();
               ScaffoldMessenger.of(context).showSnackBar(
                 const SnackBar(
-                  content: Text('Cita eliminada y finanzas actualizadas'),
+                  content: Text('Cita eliminada exitosamente'),
                   backgroundColor: AppTheme.successColor,
                 ),
               );
@@ -202,203 +150,34 @@ class _AdministrationScreenState extends State<AdministrationScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Financial Summary
-            Row(
-              children: [
-                Text(
-                  'Resumen Financiero del Mes',
-                  style: Theme.of(context).textTheme.headlineSmall,
-                ),
-                const Spacer(),
-                IconButton(
-                  onPressed: _showEditFinancialDialog,
-                  icon: const Icon(Icons.edit, color: AppTheme.primaryColor),
-                  tooltip: 'Editar datos financieros',
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
-            Row(
-              children: [
-                Expanded(
-                  child: Card(
-                    elevation: 2,
-                    shadowColor: Colors.black.withOpacity(0.1),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                    child: Container(
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(12),
-                        gradient: LinearGradient(
-                          colors: [AppTheme.successColor.withOpacity(0.1), AppTheme.successColor.withOpacity(0.05)],
-                        ),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Ingresos del Mes',
-                            style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: AppTheme.textSecondary),
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            NumberFormat.currency(symbol: '\$', decimalDigits: 2).format(_dataManager.monthlyIncome),
-                            style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                              color: AppTheme.successColor,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Card(
-                    elevation: 2,
-                    shadowColor: Colors.black.withOpacity(0.1),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                    child: Container(
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(12),
-                        gradient: LinearGradient(
-                          colors: [AppTheme.errorColor.withOpacity(0.1), AppTheme.errorColor.withOpacity(0.05)],
-                        ),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Costos del Mes',
-                            style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: AppTheme.textSecondary),
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            NumberFormat.currency(symbol: '\$', decimalDigits: 2).format(_dataManager.monthlyCosts),
-                            style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                              color: AppTheme.errorColor,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            Card(
-              elevation: 2,
-              shadowColor: Colors.black.withOpacity(0.1),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-              child: Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(12),
-                  gradient: LinearGradient(
-                    colors: [AppTheme.primaryColor.withOpacity(0.1), AppTheme.primaryColor.withOpacity(0.05)],
-                  ),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Ganancia del Mes',
-                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: AppTheme.textSecondary),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      NumberFormat.currency(symbol: '\$', decimalDigits: 2).format(_dataManager.monthlyProfit),
-                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                        color: AppTheme.primaryColor,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            const SizedBox(height: 24),
-
-            // Statistics
-            Text(
-              'Estadísticas Generales',
-              style: Theme.of(context).textTheme.headlineSmall,
-            ),
-            const SizedBox(height: 16),
-            Row(
-              children: [
-                Expanded(
-                  child: Card(
-                    elevation: 2,
-                    shadowColor: Colors.black.withOpacity(0.1),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                    child: Padding(
-                      padding: const EdgeInsets.all(16),
-                      child: Column(
-                        children: [
-                          Icon(Icons.people, color: AppTheme.primaryColor, size: 32),
-                          const SizedBox(height: 8),
-                          Text(
-                            _dataManager.totalClients.toString(),
-                            style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
-                          ),
-                          Text(
-                            'Total Clientes',
-                            style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: AppTheme.textSecondary),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Card(
-                    elevation: 2,
-                    shadowColor: Colors.black.withOpacity(0.1),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                    child: Padding(
-                      padding: const EdgeInsets.all(16),
-                      child: Column(
-                        children: [
-                          Icon(Icons.spa, color: AppTheme.secondaryColor, size: 32),
-                          const SizedBox(height: 8),
-                          Text(
-                            _dataManager.activeServices.toString(),
-                            style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
-                          ),
-                          Text(
-                            'Servicios Activos',
-                            style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: AppTheme.textSecondary),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 24),
-
-            // Completed Appointments
+            // Header
             Row(
               children: [
                 Text(
                   'Citas Completadas',
                   style: Theme.of(context).textTheme.headlineSmall,
                 ),
-                const Spacer(),
-                Text(
-                  '${_dataManager.completedAppointments.length} citas',
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: AppTheme.textSecondary),
+                const SizedBox(width: 16),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: AppTheme.primaryColor.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Text(
+                    '${_dataManager.completedAppointments.length} citas',
+                    style: TextStyle(
+                      color: AppTheme.primaryColor,
+                      fontWeight: FontWeight.w600,
+                      fontSize: 14,
+                    ),
+                  ),
                 ),
               ],
             ),
             const SizedBox(height: 16),
+            
+            // Completed Appointments List
             _dataManager.completedAppointments.isEmpty
                 ? Card(
                     elevation: 2,
@@ -408,7 +187,7 @@ class _AdministrationScreenState extends State<AdministrationScreen> {
                       padding: const EdgeInsets.all(32),
                       child: Column(
                         children: [
-                          Icon(Icons.history, size: 48, color: Colors.grey.shade400),
+                          Icon(Icons.check_circle_outline, size: 48, color: Colors.grey.shade400),
                           const SizedBox(height: 16),
                           Text(
                             'No hay citas completadas',
@@ -416,7 +195,7 @@ class _AdministrationScreenState extends State<AdministrationScreen> {
                           ),
                           const SizedBox(height: 8),
                           Text(
-                            'Las citas completadas aparecerán aquí',
+                            'Las citas que se completen aparecerán aquí para su administración',
                             style: TextStyle(color: Colors.grey.shade500, fontSize: 14),
                           ),
                         ],
@@ -429,6 +208,9 @@ class _AdministrationScreenState extends State<AdministrationScreen> {
                     itemCount: _dataManager.completedAppointments.length,
                     itemBuilder: (context, index) {
                       final appointment = _dataManager.completedAppointments[index];
+                      final total = (appointment['income'] ?? 0.0) + (appointment['cost'] ?? 0.0);
+                      final profit = (appointment['income'] ?? 0.0) - (appointment['cost'] ?? 0.0);
+                      
                       return Card(
                         elevation: 2,
                         shadowColor: Colors.black.withOpacity(0.1),
@@ -441,8 +223,8 @@ class _AdministrationScreenState extends State<AdministrationScreen> {
                               Row(
                                 children: [
                                   CircleAvatar(
-                                    backgroundColor: AppTheme.successColor.withOpacity(0.1),
-                                    child: Icon(Icons.check_circle, color: AppTheme.successColor, size: 20),
+                                    backgroundColor: AppTheme.primaryColor.withOpacity(0.1),
+                                    child: Icon(Icons.person, color: AppTheme.primaryColor, size: 20),
                                   ),
                                   const SizedBox(width: 12),
                                   Expanded(
@@ -450,11 +232,11 @@ class _AdministrationScreenState extends State<AdministrationScreen> {
                                       crossAxisAlignment: CrossAxisAlignment.start,
                                       children: [
                                         Text(
-                                          appointment['clientName'],
+                                          appointment['clientName'] ?? 'Cliente sin nombre',
                                           style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
                                         ),
                                         Text(
-                                          appointment['serviceName'],
+                                          appointment['serviceName'] ?? 'Servicio sin nombre',
                                           style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: AppTheme.textSecondary),
                                         ),
                                       ],
@@ -463,12 +245,25 @@ class _AdministrationScreenState extends State<AdministrationScreen> {
                                   PopupMenuButton<String>(
                                     onSelected: (value) {
                                       switch (value) {
+                                        case 'edit':
+                                          _editCompletedAppointment(appointment);
+                                          break;
                                         case 'delete':
                                           _deleteCompletedAppointment(appointment);
                                           break;
                                       }
                                     },
                                     itemBuilder: (context) => [
+                                      const PopupMenuItem(
+                                        value: 'edit',
+                                        child: Row(
+                                          children: [
+                                            Icon(Icons.edit, size: 16, color: AppTheme.primaryColor),
+                                            SizedBox(width: 8),
+                                            Text('Editar'),
+                                          ],
+                                        ),
+                                      ),
                                       const PopupMenuItem(
                                         value: 'delete',
                                         child: Row(
@@ -491,29 +286,60 @@ class _AdministrationScreenState extends State<AdministrationScreen> {
                                     style: Theme.of(context).textTheme.bodySmall?.copyWith(color: AppTheme.textSecondary),
                                   ),
                                   const Spacer(),
-                                  Text(
-                                    NumberFormat.currency(symbol: '\$', decimalDigits: 2).format(appointment['amount']),
-                                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                                      color: AppTheme.successColor,
-                                      fontWeight: FontWeight.bold,
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                    decoration: BoxDecoration(
+                                      color: _getProfitColor(profit).withOpacity(0.1),
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                    child: Text(
+                                      NumberFormat.currency(symbol: '\$', decimalDigits: 2).format(profit),
+                                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                        color: _getProfitColor(profit),
+                                        fontWeight: FontWeight.bold,
+                                      ),
                                     ),
                                   ),
                                 ],
                               ),
                               const SizedBox(height: 8),
-                              if (appointment['notes'] != null && appointment['notes'].toString().isNotEmpty)
-                                Container(
-                                  width: double.infinity,
-                                  padding: const EdgeInsets.all(12),
-                                  decoration: BoxDecoration(
-                                    color: Colors.grey.shade50,
-                                    borderRadius: BorderRadius.circular(8),
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                children: [
+                                  Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        'Ingreso',
+                                        style: Theme.of(context).textTheme.bodySmall?.copyWith(color: AppTheme.textSecondary),
+                                      ),
+                                      Text(
+                                        NumberFormat.currency(symbol: '\$', decimalDigits: 2).format(appointment['income'] ?? 0),
+                                        style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                                          color: AppTheme.successColor,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                    ],
                                   ),
-                                  child: Text(
-                                    appointment['notes'],
-                                    style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Colors.grey.shade600),
+                                  Column(
+                                    crossAxisAlignment: CrossAxisAlignment.end,
+                                    children: [
+                                      Text(
+                                        'Costo',
+                                        style: Theme.of(context).textTheme.bodySmall?.copyWith(color: AppTheme.textSecondary),
+                                      ),
+                                      Text(
+                                        NumberFormat.currency(symbol: '\$', decimalDigits: 2).format(appointment['cost'] ?? 0),
+                                        style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                                          color: AppTheme.errorColor,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                    ],
                                   ),
-                                ),
+                                ],
+                              ),
                             ],
                           ),
                         ),
@@ -524,5 +350,11 @@ class _AdministrationScreenState extends State<AdministrationScreen> {
         ),
       ),
     );
+  }
+
+  Color _getProfitColor(double profit) {
+    if (profit > 0) return AppTheme.successColor;
+    if (profit < 0) return AppTheme.errorColor;
+    return AppTheme.textSecondary;
   }
 }

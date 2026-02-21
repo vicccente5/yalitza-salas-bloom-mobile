@@ -5,6 +5,7 @@ import '../screens/clients/clients_screen_improved.dart';
 import '../screens/appointments/appointments_screen_enhanced.dart';
 import '../screens/services/services_screen_improved.dart';
 import '../screens/supplies/supplies_screen_improved.dart';
+import '../screens/finanzas/finanzas_screen.dart';
 import '../screens/administration/administration_screen_improved.dart';
 
 class App extends StatelessWidget {
@@ -37,6 +38,7 @@ class _MainScreenState extends State<MainScreen> {
     const AppointmentsScreen(),
     const ServicesScreen(),
     const SuppliesScreen(),
+    const FinanzasScreen(),
     const AdministrationScreen(),
   ];
 
@@ -84,6 +86,11 @@ class _MainScreenState extends State<MainScreen> {
             icon: Icon(Icons.inventory_outlined),
             activeIcon: Icon(Icons.inventory),
             label: 'Suministros',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.account_balance_wallet_outlined),
+            activeIcon: Icon(Icons.account_balance_wallet),
+            label: 'Finanzas',
           ),
           BottomNavigationBarItem(
             icon: Icon(Icons.admin_panel_settings_outlined),
