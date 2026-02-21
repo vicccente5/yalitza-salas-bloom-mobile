@@ -51,3 +51,6 @@ flutter build apk --release
 El archivo sale en:
 
 `build\app\outputs\flutter-apk\app-release.apk`
+
+
+modificar apartado gastos para poner que tipo de gasto es y separar los tipos de gastos y impplementar gastos como de la casa y la luz
