@@ -19,6 +19,11 @@ class _FinanzasScreenState extends State<FinanzasScreen> {
     super.initState();
     _incomeController.text = _dataManager.monthlyIncome.toString();
     _dataManager.addListener(_updateUI);
+    
+    // Refrescar datos desde Supabase al iniciar la pantalla
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _dataManager.refreshData();
+    });
   }
 
   @override

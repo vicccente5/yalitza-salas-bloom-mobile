@@ -65,6 +65,8 @@ class DataManager {
       try {
         _supabase = Supabase.instance.client;
         _isInitialized = true;
+        // Cargar datos desde Supabase al inicializar
+        await _loadFromSupabase();
         return;
       } catch (_) {
         // Not initialized yet
@@ -421,7 +423,7 @@ class DataManager {
     try {
       final expensesRows = await _selectAllWithOrderFallback(
         _expensesTable!,
-        orderColumn: 'date',
+        orderColumn: 'fecha', // Cambiado de 'date' a 'fecha'
         ascending: false,
       );
       _expenses
@@ -575,6 +577,14 @@ class DataManager {
   double get mantenimientoExpenses => _mantenimientoExpenses;
   double get otrosExpenses => _otrosExpenses;
   double get totalMonthlyExpenses => _totalMonthlyExpenses;
+
+  // Método para refrescar datos desde Supabase
+  Future<void> refreshData() async {
+    await _ensureInitialized();
+    await _ensureSchemaResolved();
+    await _loadFromSupabase();
+    _notifyListeners();
+  }
 
   // Client operations
   Future<bool> addClient(Map<String, dynamic> client) async {
