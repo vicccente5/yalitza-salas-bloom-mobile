@@ -23,6 +23,7 @@ class DataManager {
   String? _financialTable;
   String? _expensesTable;
   String? _expenseCategoriesTable;
+  String? _monthlyProfitsTable;
 
   String? _lastError;
   String? get lastError => _lastError;
@@ -103,13 +104,14 @@ class DataManager {
       _suppliesTable = await resolve(['supplies', 'suministros', 'products', 'inventory', 'inventario']);
       _appointmentsTable = await resolve(['appointments', 'citas', 'bookings', 'reservations']);
       _completedAppointmentsTable = await resolve(['completed_appointments', 'citas_completadas', 'completed_bookings']);
-      _financialTable = await resolve(['financial_data', 'finanzas', 'financial', 'datos_financieros']);
-      _expensesTable = await resolve(['expenses', 'gastos', 'costos', 'egresos']);
+      _expensesTable = await resolve(['expenses', 'gastos', 'expense', 'gasto']);
       _expenseCategoriesTable = await resolve(['expense_categories', 'categorias_gastos', 'gastos_categorias']);
+      _monthlyProfitsTable = await resolve(['monthly_profits', 'ganancias_mensuales', 'monthly_profits_data']);
+      _monthlyIncomeTable = await resolve(['monthly_income', 'ingresos_mensuales', 'monthly_income_data']);
+      _suppliesTable = await resolve(['supplies', 'suministros', 'products', 'inventory', 'inventario']);
 
       _clientsTable ??= 'clients';
       _servicesTable ??= 'services';
-      _suppliesTable ??= 'supplies';
       _appointmentsTable ??= 'appointments';
       _completedAppointmentsTable ??= 'completed_appointments';
       _financialTable ??= 'financial_data';
@@ -929,10 +931,18 @@ class DataManager {
               ...appointment,
               'notes': 'Cita completada exitosamente',
             });
+            
+            // Registrar ingreso por fecha en la nueva tabla
             final amount = _asDouble(appointment['amount']);
-            _monthlyIncome += amount;
-            _monthlyProfit = _monthlyIncome - _monthlyCosts;
-            updateFinancialData();
+            final appointmentDate = appointment['dateTime'] as DateTime;
+            await addMonthlyIncome(
+              date: appointmentDate,
+              amount: amount,
+              description: 'Cita completada: ${appointment['clientName']} - ${appointment['serviceName']}',
+              source: 'appointment',
+              appointmentId: id.toString(),
+            );
+            
           } catch (e) {
             await _supabase.from(_appointmentsTable!).update({'status': status}).eq('id', id);
             _appointments[index]['status'] = status;
@@ -1004,13 +1014,30 @@ class DataManager {
       await _ensureSchemaResolved();
       final index = _completedAppointments.indexWhere((a) => a['id'] == id);
       if (index == -1) return;
-      final amount = (_completedAppointments[index]['amount'] ?? 0).toDouble();
+      final appointment = _completedAppointments[index];
+      
       try {
+        // Eliminar la cita completada
         await _supabase.from(_completedAppointmentsTable!).delete().eq('id', id);
+        
+        // Eliminar los ingresos correspondientes de monthly_income
+        try {
+          final appointmentDate = DateTime.parse(appointment['date_time']);
+          await deleteMonthlyIncomeByAppointmentId(id.toString(), appointmentDate);
+        } catch (e) {
+          print('ERROR eliminando ingresos de monthly_income: $e');
+        }
+        
+        // Actualizar variables locales
+        final amount = (_completedAppointments[index]['amount'] ?? 0).toDouble();
         _monthlyIncome -= amount;
         _monthlyProfit = _monthlyIncome - _monthlyCosts;
         updateFinancialData();
         _completedAppointments.removeAt(index);
+        
+        // Actualizar ganancias del mes actual
+        await updateCurrentMonthProfits();
+        
         _notifyListeners();
       } catch (e) {
         print('ERROR deleteCompletedAppointment Supabase: $e');
@@ -1135,6 +1162,10 @@ class DataManager {
         _calculateMonthlyExpensesByCategory();
         _notifyListeners();
         print('DEBUG: Gasto agregado exitosamente');
+        
+        // Actualizar ganancias del mes actual automáticamente
+        await updateCurrentMonthProfits();
+        
         return true;
       } catch (e) {
         print('ERROR en inserción directa: $e');
@@ -1149,6 +1180,10 @@ class DataManager {
           _calculateMonthlyExpensesByCategory();
           _notifyListeners();
           print('DEBUG: Gasto agregado exitosamente (fallback)');
+          
+          // Actualizar ganancias del mes actual automáticamente
+          await updateCurrentMonthProfits();
+          
           return true;
         } catch (fallbackError) {
           print('ERROR en fallback: $fallbackError');
@@ -1217,6 +1252,417 @@ class DataManager {
       _setError(e);
       return false;
     }
+  }
+
+  // Monthly Income operations
+  List<Map<String, dynamic>> _monthlyIncomeRecords = [];
+  String? _monthlyIncomeTable;
+
+  List<Map<String, dynamic>> get monthlyIncomeRecords => List.unmodifiable(_monthlyIncomeRecords);
+
+  Future<bool> addMonthlyIncome({
+    required DateTime date,
+    required double amount,
+    String? description,
+    String source = 'appointment',
+    String? appointmentId,
+  }) async {
+    await _ensureInitialized();
+    await _ensureSchemaResolved();
+    _lastError = null;
+    
+    try {
+      final data = {
+        'income_date': date.toIso8601String().split('T')[0],
+        'amount': amount,
+        'description': description ?? '',
+        'source': source,
+        'appointment_id': appointmentId,
+      };
+
+      final inserted = await _supabase
+          .from(_monthlyIncomeTable!)
+          .insert(data)
+          .select('*')
+          .single();
+      
+      _monthlyIncomeRecords.insert(0, _mapMonthlyIncomeFromDb(Map<String, dynamic>.from(inserted)));
+      _notifyListeners();
+      
+      // Actualizar resumen mensual
+      await _updateMonthlySummary(date);
+      
+      return true;
+    } catch (e) {
+      _setError(e);
+      return false;
+    }
+  }
+
+  Future<bool> updateMonthlyIncome(String id, Map<String, dynamic> updates) async {
+    await _ensureInitialized();
+    await _ensureSchemaResolved();
+    _lastError = null;
+    
+    try {
+      final data = <String, dynamic>{};
+      if (updates.containsKey('amount')) data['amount'] = updates['amount'];
+      if (updates.containsKey('description')) data['description'] = updates['description'];
+      if (updates.containsKey('source')) data['source'] = updates['source'];
+      
+      final updated = await _supabase
+          .from(_monthlyIncomeTable!)
+          .update(data)
+          .eq('id', id)
+          .select('*')
+          .single();
+      
+      final index = _monthlyIncomeRecords.indexWhere((item) => item['id'] == id);
+      if (index != -1) {
+        _monthlyIncomeRecords[index] = _mapMonthlyIncomeFromDb(Map<String, dynamic>.from(updated));
+      }
+      
+      _notifyListeners();
+      
+      // Actualizar resumen mensual
+      if (updated['income_date'] != null) {
+        await _updateMonthlySummary(DateTime.parse(updated['income_date']));
+      }
+      
+      return true;
+    } catch (e) {
+      _setError(e);
+      return false;
+    }
+  }
+
+  Future<List<Map<String, dynamic>>> getMonthlyIncomeForMonth(DateTime month) async {
+    await _ensureInitialized();
+    await _ensureSchemaResolved();
+    _lastError = null;
+    
+    try {
+      final monthStart = DateTime(month.year, month.month, 1);
+      final monthEnd = DateTime(month.year, month.month + 1, 0, 23, 59, 59);
+      
+      final income = await _supabase
+          .from(_monthlyIncomeTable!)
+          .select('*')
+          .gte('income_date', monthStart.toIso8601String())
+          .lte('income_date', monthEnd.toIso8601String())
+          .order('income_date', ascending: false);
+      
+      return List<Map<String, dynamic>>.from(income);
+    } catch (e) {
+      _setError(e);
+      return [];
+    }
+  }
+
+  Future<void> _updateMonthlySummary(DateTime date) async {
+    await _ensureInitialized();
+    await _ensureSchemaResolved();
+    
+    try {
+      final monthStart = DateTime(date.year, date.month, 1);
+      final monthEnd = DateTime(date.year, date.month + 1, 0, 23, 59, 59);
+      
+      // Calcular total de ingresos del mes
+      final income = await _supabase
+          .from(_monthlyIncomeTable!)
+          .select('amount')
+          .gte('income_date', monthStart.toIso8601String())
+          .lte('income_date', monthEnd.toIso8601String());
+      
+      double totalIncome = 0;
+      for (final row in income) {
+        totalIncome += (row['amount'] as num?)?.toDouble() ?? 0.0;
+      }
+      
+      // Actualizar tabla financial_data con el resumen mensual
+      await _supabase
+          .from(_financialTable!)
+          .upsert({
+            'id': 1,
+            'monthly_income': totalIncome,
+            'monthly_costs': _monthlyCosts,
+            'monthly_profit': totalIncome - _monthlyCosts,
+            'updated_at': DateTime.now().toIso8601String(),
+          }, onConflict: 'id');
+      
+      // Actualizar variable local
+      _monthlyIncome = totalIncome;
+      _monthlyProfit = _monthlyIncome - _monthlyCosts;
+      
+    } catch (e) {
+      print('ERROR updating monthly summary: $e');
+    }
+  }
+
+  Map<String, dynamic> _mapMonthlyIncomeFromDb(Map<String, dynamic> row) {
+    return {
+      'id': row['id'],
+      'income_date': row['income_date'],
+      'amount': (row['amount'] as num?)?.toDouble() ?? 0.0,
+      'description': row['description'] ?? '',
+      'source': row['source'] ?? '',
+      'appointment_id': row['appointment_id'],
+      'created_at': row['created_at'],
+      'updated_at': row['updated_at'],
+    };
+  }
+
+  Future<bool> deleteMonthlyIncomeByAppointmentId(String appointmentId, DateTime appointmentDate) async {
+    await _ensureInitialized();
+    await _ensureSchemaResolved();
+    _lastError = null;
+    
+    try {
+      // Buscar ingresos asociados a esta cita
+      final incomes = await _supabase
+          .from(_monthlyIncomeTable!)
+          .select('*')
+          .eq('appointment_id', appointmentId);
+      
+      double totalAmount = 0;
+      for (final income in incomes) {
+        final amount = (income['amount'] as num?)?.toDouble() ?? 0.0;
+        totalAmount += amount;
+        
+        // Eliminar cada ingreso individual
+        await _supabase.from(_monthlyIncomeTable!).delete().eq('id', income['id']);
+      }
+      
+      // Actualizar variables locales
+      _monthlyIncome -= totalAmount;
+      _monthlyProfit = _monthlyIncome - _monthlyCosts;
+      
+      // Actualizar resumen mensual
+      await _updateMonthlySummary(appointmentDate);
+      
+      // Actualizar datos financieros
+      updateFinancialData();
+      
+      _notifyListeners();
+      return true;
+    } catch (e) {
+      _setError(e);
+      return false;
+    }
+  }
+
+  Future<bool> deleteMonthlyIncome(String incomeId) async {
+    await _ensureInitialized();
+    await _ensureSchemaResolved();
+    _lastError = null;
+    
+    try {
+      // Obtener información del ingreso antes de eliminar
+      final incomeData = await _supabase
+          .from(_monthlyIncomeTable!)
+          .select('*')
+          .eq('id', incomeId)
+          .single();
+      
+      if (incomeData != null) {
+        final amount = (incomeData['amount'] as num?)?.toDouble() ?? 0.0;
+        final incomeDate = incomeData['income_date'];
+        
+        // Eliminar el ingreso
+        await _supabase.from(_monthlyIncomeTable!).delete().eq('id', incomeId);
+        
+        // Actualizar variable local
+        _monthlyIncome -= amount;
+        _monthlyProfit = _monthlyIncome - _monthlyCosts;
+        
+        // Actualizar resumen mensual
+        if (incomeDate != null) {
+          await _updateMonthlySummary(DateTime.parse(incomeDate));
+        }
+        
+        // Actualizar datos financieros
+        updateFinancialData();
+        
+        _notifyListeners();
+      }
+      
+      return true;
+    } catch (e) {
+      _setError(e);
+      return false;
+    }
+  }
+
+  // Monthly Profits operations
+  List<Map<String, dynamic>> _monthlyProfits = [];
+
+  List<Map<String, dynamic>> get monthlyProfits => List.unmodifiable(_monthlyProfits);
+
+  Future<bool> saveMonthlyProfit({
+    required DateTime month,
+    required double totalIncome,
+    required double totalExpenses,
+    required double netProfit,
+    required int appointmentsCount,
+  }) async {
+    await _ensureInitialized();
+    await _ensureSchemaResolved();
+    _lastError = null;
+    
+    try {
+      final monthDate = DateTime(month.year, month.month, 1);
+      
+      // Calcular número de gastos del mes
+      int expensesCount = 0;
+      try {
+        final monthStart = DateTime(month.year, month.month, 1);
+        final monthEnd = DateTime(month.year, month.month + 1, 0, 23, 59, 59);
+        
+        final expenses = await _supabase
+            .from(_expensesTable!)
+            .select('id')
+            .gte('fecha', monthStart.toIso8601String())
+            .lte('fecha', monthEnd.toIso8601String());
+        
+        expensesCount = expenses.length;
+      } catch (e) {
+        print('Error counting expenses: $e');
+      }
+      
+      final data = {
+        'month': monthDate.toIso8601String().split('T')[0],
+        'total_income': totalIncome,
+        'total_expenses': totalExpenses,
+        'net_profit': netProfit,
+        'appointments_count': appointmentsCount,
+        'expenses_count': expensesCount,
+      };
+
+      // Verificar si ya existe un registro para este mes
+      final existing = await _supabase
+          .from(_monthlyProfitsTable!)
+          .select()
+          .eq('month', monthDate.toIso8601String().split('T')[0])
+          .maybeSingle();
+
+      Map<String, dynamic> result;
+      if (existing != null) {
+        // Actualizar registro existente
+        result = await _supabase
+            .from(_monthlyProfitsTable!)
+            .update(data)
+            .eq('id', existing['id'])
+            .select()
+            .single();
+        
+        // Actualizar en la lista local
+        final index = _monthlyProfits.indexWhere((p) => p['id'] == existing['id']);
+        if (index != -1) {
+          _monthlyProfits[index] = result;
+        }
+      } else {
+        // Insertar nuevo registro
+        result = await _supabase
+            .from(_monthlyProfitsTable!)
+            .insert(data)
+            .select()
+            .single();
+        
+        _monthlyProfits.insert(0, result);
+      }
+
+      _notifyListeners();
+      return true;
+    } catch (e) {
+      _setError(e);
+      return false;
+    }
+  }
+
+  Future<List<Map<String, dynamic>>> getMonthlyProfits() async {
+    await _ensureInitialized();
+    await _ensureSchemaResolved();
+    _lastError = null;
+    
+    try {
+      final profits = await _supabase
+          .from(_monthlyProfitsTable!)
+          .select('*')
+          .order('month', ascending: false);
+
+      _monthlyProfits = List<Map<String, dynamic>>.from(profits);
+      return _monthlyProfits;
+    } catch (e) {
+      _setError(e);
+      return [];
+    }
+  }
+
+  Future<bool> calculateAndSaveMonthlyProfit(DateTime month) async {
+    await _ensureInitialized();
+    await _ensureSchemaResolved();
+    _lastError = null;
+
+    try {
+      // Obtener citas completadas del mes
+      final monthStart = DateTime(month.year, month.month, 1);
+      final monthEnd = DateTime(month.year, month.month + 1, 0, 23, 59, 59);
+      
+      final completedAppointments = await _supabase
+          .from(_completedAppointmentsTable!)
+          .select('*')
+          .gte('date_time', monthStart.toIso8601String())
+          .lte('date_time', monthEnd.toIso8601String());
+
+      // Calcular ingresos totales
+      double totalIncome = 0;
+      int appointmentsCount = completedAppointments.length;
+      
+      for (final appointment in completedAppointments) {
+        final amount = _asDouble(appointment['amount']);
+        if (amount != null) {
+          totalIncome += amount;
+        }
+      }
+
+      // Obtener gastos del mes
+      final expenses = await _supabase
+          .from(_expensesTable!)
+          .select('*')
+          .gte('fecha', monthStart.toIso8601String())
+          .lte('fecha', monthEnd.toIso8601String());
+
+      double totalExpenses = 0;
+      for (final expense in expenses) {
+        final amount = _asDouble(expense['amount']);
+        if (amount != null) {
+          totalExpenses += amount;
+        }
+      }
+
+      // Calcular ganancia neta
+      final netProfit = totalIncome - totalExpenses;
+
+      // Guardar en monthly_profts con gastos incluidos
+      return await saveMonthlyProfit(
+        month: month,
+        totalIncome: totalIncome,
+        totalExpenses: totalExpenses,
+        netProfit: netProfit,
+        appointmentsCount: appointmentsCount,
+      );
+    } catch (e) {
+      _setError(e);
+      return false;
+    }
+  }
+
+  // Método para actualizar ganancias del mes actual automáticamente
+  Future<void> updateCurrentMonthProfits() async {
+    final now = DateTime.now();
+    await calculateAndSaveMonthlyProfit(now);
+    // También actualizar la lista local de ganancias
+    await getMonthlyProfits();
   }
 
   // Expense categories operations

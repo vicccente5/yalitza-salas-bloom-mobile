@@ -15,19 +15,6 @@ class _FinanzasScreenState extends State<FinanzasScreen> {
   final DataManager _dataManager = DataManager();
   final TextEditingController _incomeController = TextEditingController();
 
-  // Método seguro para formatear fechas
-  String _formatDate(DateTime date) {
-    try {
-      final months = [
-        'enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio',
-        'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'
-      ];
-      return '${months[date.month - 1]} ${date.year}';
-    } catch (e) {
-      return '${date.day}/${date.month}/${date.year}';
-    }
-  }
-
   @override
   void initState() {
     super.initState();
@@ -56,93 +43,86 @@ class _FinanzasScreenState extends State<FinanzasScreen> {
   }
 
   void _showEditFinancialDialog() {
-    // Calcular ingresos reales del mes actual
-    final now = DateTime.now();
-    final monthStart = DateTime(now.year, now.month, 1);
-    final monthEnd = DateTime(now.year, now.month + 1, 0, 23, 59, 59);
-    
-    double currentMonthIncome = 0;
-    for (final appointment in _dataManager.completedAppointments) {
-      try {
-        final appointmentDate = DateTime.parse(appointment['date_time']);
-        if (appointmentDate.isAfter(monthStart.subtract(const Duration(days: 1))) && 
-            appointmentDate.isBefore(monthEnd.add(const Duration(days: 1)))) {
-          final amount = (appointment['amount'] as num?)?.toDouble() ?? 0.0;
-          currentMonthIncome += amount;
-        }
-      } catch (e) {
-        // Ignorar errores de parsing de fechas
-      }
-    }
-
-    final incomeController = TextEditingController(text: currentMonthIncome.toString());
-    final expensesController = TextEditingController(text: _dataManager.totalMonthlyExpenses.toString());
+    final incomeController = TextEditingController(text: _dataManager.monthlyIncome.toString());
 
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Editar Datos Financieros'),
-        content: SizedBox(
-          width: 450,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: incomeController,
-                decoration: const InputDecoration(
-                  labelText: 'Ingresos del mes',
-                  border: OutlineInputBorder(),
-                  prefixText: '\$',
-                ),
-                keyboardType: TextInputType.number,
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: incomeController,
+              decoration: const InputDecoration(
+                labelText: 'Ingresos del mes',
+                border: OutlineInputBorder(),
+                prefixText: '\$',
               ),
-              const SizedBox(height: 16),
-              TextField(
-                controller: expensesController,
-                decoration: const InputDecoration(
-                  labelText: 'Gastos del mes',
-                  border: OutlineInputBorder(),
-                  prefixText: '\$',
-                ),
-                keyboardType: TextInputType.number,
+              keyboardType: TextInputType.number,
+            ),
+            const SizedBox(height: 16),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.grey.shade100,
+                borderRadius: BorderRadius.circular(8),
               ),
-              const SizedBox(height: 16),
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: AppTheme.primaryColor.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Row(
-                  children: [
-                    Text(
-                      'Ganancia estimada: ',
-                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        fontWeight: FontWeight.w500,
-                      ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Resumen de Gastos:',
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w600,
                     ),
-                    Text(
-                      NumberFormat.currency(symbol: '\$', decimalDigits: 2).format(
-                        (double.tryParse(incomeController.text) ?? 0) - (double.tryParse(expensesController.text) ?? 0)
-                      ),
-                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        color: AppTheme.primaryColor,
-                        fontWeight: FontWeight.bold,
-                      ),
+                  ),
+                  const SizedBox(height: 8),
+                  _buildExpenseSummaryItem('Casa', _dataManager.casaExpenses),
+                  _buildExpenseSummaryItem('Luz', _dataManager.luzExpenses),
+                  _buildExpenseSummaryItem('Agua', _dataManager.aguaExpenses),
+                  _buildExpenseSummaryItem('Teléfono/Internet', _dataManager.telefonoInternetExpenses),
+                  _buildExpenseSummaryItem('Materiales de Belleza', _dataManager.materialesBellezaExpenses),
+                  _buildExpenseSummaryItem('Suministros', _dataManager.suministrosExpenses),
+                  _buildExpenseSummaryItem('Marketing', _dataManager.marketingExpenses),
+                  _buildExpenseSummaryItem('Transporte', _dataManager.transporteExpenses),
+                  _buildExpenseSummaryItem('Seguros', _dataManager.segurosExpenses),
+                  _buildExpenseSummaryItem('Impuestos', _dataManager.impuestosExpenses),
+                  _buildExpenseSummaryItem('Mantenimiento', _dataManager.mantenimientoExpenses),
+                  _buildExpenseSummaryItem('Otros', _dataManager.otrosExpenses),
+                  const Divider(),
+                  _buildExpenseSummaryItem('TOTAL GASTOS', _dataManager.totalMonthlyExpenses, isBold: true),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: AppTheme.primaryColor.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Row(
+                children: [
+                  Text(
+                    'Ganancia estimada: ',
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      fontWeight: FontWeight.w500,
                     ),
-                  ],
-                ),
+                  ),
+                  Text(
+                    NumberFormat.currency(symbol: '\$', decimalDigits: 2).format(
+                      (double.tryParse(incomeController.text) ?? 0) - _dataManager.totalMonthlyExpenses
+                    ),
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      color: AppTheme.primaryColor,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ],
               ),
-              const SizedBox(height: 8),
-              Text(
-                'Nota: Los ingresos se calculan automáticamente de las citas completadas del mes actual',
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: Colors.grey[600],
-                ),
-              ),
-            ],
-          ),
+            ),
+          ],
         ),
         actions: [
           TextButton(
@@ -150,11 +130,10 @@ class _FinanzasScreenState extends State<FinanzasScreen> {
             child: const Text('Cancelar'),
           ),
           ElevatedButton(
-            onPressed: () async {
+            onPressed: () {
               final income = double.tryParse(incomeController.text);
-              final expenses = double.tryParse(expensesController.text);
               
-              if (income == null || expenses == null) {
+              if (income == null) {
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(
                     content: Text('Ingresa valores numéricos válidos'),
@@ -164,11 +143,7 @@ class _FinanzasScreenState extends State<FinanzasScreen> {
                 return;
               }
 
-              // Actualizar datos financieros
-              _dataManager.updateFinancialData(income: income, costs: expenses);
-              
-              // Actualizar ganancias del mes actual automáticamente
-              await _dataManager.updateCurrentMonthProfits();
+              _dataManager.updateFinancialData(income: income);
 
               Navigator.of(context).pop();
               ScaffoldMessenger.of(context).showSnackBar(
@@ -272,7 +247,7 @@ class _FinanzasScreenState extends State<FinanzasScreen> {
                 const SizedBox(height: 12),
                 ListTile(
                   title: const Text('Fecha'),
-                  subtitle: Text(_formatDate(selectedDate)),
+                  subtitle: Text(DateFormat('d/M/yyyy').format(selectedDate)),
                   trailing: const Icon(Icons.calendar_today),
                   onTap: () async {
                     final date = await showDatePicker(
@@ -411,212 +386,6 @@ class _FinanzasScreenState extends State<FinanzasScreen> {
     );
   }
 
-  Color _getCategoryColor(String category) {
-    switch (category.toLowerCase()) {
-      case 'casa':
-        return Colors.red;
-      case 'luz':
-        return Colors.orange;
-      case 'agua':
-        return Colors.blue;
-      case 'teléfono/internet':
-      case 'telefono/internet':
-        return Colors.purple;
-      case 'materiales de belleza':
-      case 'materiales_belleza':
-        return Colors.pink;
-      case 'suministros':
-        return Colors.green;
-      case 'marketing':
-        return Colors.deepOrange;
-      case 'transporte':
-        return Colors.cyan;
-      case 'seguros':
-        return Colors.lime;
-      case 'impuestos':
-        return Colors.red.shade700;
-      case 'mantenimiento':
-        return Colors.teal;
-      default:
-        return Colors.grey;
-    }
-  }
-
-  IconData _getCategoryIcon(String category) {
-    switch (category.toLowerCase()) {
-      case 'casa':
-        return Icons.home;
-      case 'luz':
-        return Icons.lightbulb;
-      case 'agua':
-        return Icons.water_drop;
-      case 'teléfono/internet':
-      case 'telefono/internet':
-        return Icons.phone;
-      case 'materiales de belleza':
-      case 'materiales_belleza':
-        return Icons.spa;
-      case 'suministros':
-        return Icons.inventory;
-      case 'marketing':
-        return Icons.campaign;
-      case 'transporte':
-        return Icons.directions_car;
-      case 'seguros':
-        return Icons.security;
-      case 'impuestos':
-        return Icons.receipt_long;
-      case 'mantenimiento':
-        return Icons.build;
-      default:
-        return Icons.more_horiz;
-    }
-  }
-
-  Widget _buildFinancialSummary() {
-    // Calcular ingresos del mes actual usando el nuevo método
-    final now = DateTime.now();
-    final monthIncome = _dataManager.getMonthlyIncomeForMonth(now);
-    
-    return FutureBuilder<List<Map<String, dynamic>>>(
-      future: monthIncome,
-      builder: (context, snapshot) {
-        double currentMonthIncome = 0;
-        
-        if (snapshot.hasData) {
-          for (final income in snapshot.data!) {
-            currentMonthIncome += (income['amount'] as num?)?.toDouble() ?? 0.0;
-          }
-        }
-        
-        return Column(
-          children: [
-            _buildExpenseSummaryItem('Ingresos del Mes:', currentMonthIncome),
-            _buildExpenseSummaryItem('Gastos del Mes:', _dataManager.totalMonthlyExpenses, isBold: true),
-            _buildExpenseSummaryItem('Ganancia Estimada:', currentMonthIncome - _dataManager.totalMonthlyExpenses, isBold: true),
-          ],
-        );
-      },
-    );
-  }
-
-  Widget _buildExpenseCard(Map<String, dynamic> expense) {
-    return Card(
-      elevation: 2,
-      shadowColor: Colors.black.withOpacity(0.1),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                CircleAvatar(
-                  backgroundColor: _getCategoryColor(expense['category']).withOpacity(0.1),
-                  child: Icon(
-                    _getCategoryIcon(expense['category']),
-                    color: _getCategoryColor(expense['category']),
-                    size: 20,
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        expense['description'],
-                        style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
-                      ),
-                      Text(
-                        expense['category'],
-                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: AppTheme.textSecondary),
-                      ),
-                    ],
-                  ),
-                ),
-                PopupMenuButton<String>(
-                  onSelected: (value) {
-                    switch (value) {
-                      case 'delete':
-                        _deleteExpense(expense);
-                        break;
-                    }
-                  },
-                  itemBuilder: (context) => [
-                    const PopupMenuItem(
-                      value: 'delete',
-                      child: Row(
-                        children: [
-                          Icon(Icons.delete, size: 16, color: Colors.red),
-                          SizedBox(width: 8),
-                          Text('Eliminar', style: TextStyle(color: Colors.red)),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                Text(
-                  'Fecha: ${_formatDate(expense['date'])}',
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(color: AppTheme.textSecondary),
-                ),
-                const Spacer(),
-                Text(
-                  NumberFormat.currency(symbol: '\$', decimalDigits: 2).format(expense['amount']),
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    color: AppTheme.errorColor,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ],
-            ),
-            if (expense['isMonthly'] == true)
-              Padding(
-                padding: const EdgeInsets.only(top: 8),
-                child: Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: AppTheme.primaryColor.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Text(
-                    'Gasto mensual recurrente',
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: AppTheme.primaryColor,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                ),
-              ),
-            if (expense['notes'] != null && expense['notes'].toString().isNotEmpty)
-              Padding(
-                padding: const EdgeInsets.only(top: 8),
-                child: Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: Colors.grey.shade50,
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Text(
-                    expense['notes'],
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Colors.grey.shade600),
-                  ),
-                ),
-              ),
-          ],
-        ),
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -634,9 +403,20 @@ class _FinanzasScreenState extends State<FinanzasScreen> {
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(Icons.cloud_done, size: 16, color: AppTheme.successColor),
+                Icon(
+                  Icons.cloud_done,
+                  size: 16,
+                  color: AppTheme.successColor,
+                ),
                 const SizedBox(width: 4),
-                Text('Supabase', style: TextStyle(color: AppTheme.successColor, fontSize: 12, fontWeight: FontWeight.w500)),
+                Text(
+                  'Supabase',
+                  style: TextStyle(
+                    color: AppTheme.successColor,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
               ],
             ),
           ),
@@ -830,5 +610,277 @@ class _FinanzasScreenState extends State<FinanzasScreen> {
         ),
       ),
     );
+  }
+                            style: TextStyle(color: Colors.grey.shade500, fontSize: 14),
+                          ),
+                        ],
+                      ),
+                    ),
+                  )
+                : ListView.builder(
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    itemCount: _dataManager.expenses.length,
+                    itemBuilder: (context, index) {
+                      final expense = _dataManager.expenses[index];
+                      return Card(
+                        elevation: 2,
+                        shadowColor: Colors.black.withOpacity(0.1),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        child: Padding(
+                          padding: const EdgeInsets.all(16),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  CircleAvatar(
+                                    backgroundColor: _getCategoryColor(expense['category']).withOpacity(0.1),
+                                    child: Icon(
+                                      _getCategoryIcon(expense['category']),
+                                      color: _getCategoryColor(expense['category']),
+                                      size: 20,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          expense['description'],
+                                          style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
+                                        ),
+                                        Text(
+                                          expense['category'],
+                                          style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: AppTheme.textSecondary),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  PopupMenuButton<String>(
+                                    onSelected: (value) {
+                                      switch (value) {
+                                        case 'delete':
+                                          _deleteExpense(expense);
+                                          break;
+                                      }
+                                    },
+                                    itemBuilder: (context) => [
+                                      const PopupMenuItem(
+                                        value: 'delete',
+                                        child: Row(
+                                          children: [
+                                            Icon(Icons.delete, size: 16, color: Colors.red),
+                                            SizedBox(width: 8),
+                                            Text('Eliminar', style: TextStyle(color: Colors.red)),
+                                          ],
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 12),
+                              Row(
+                                children: [
+                                  Text(
+                                    'Fecha: ${DateFormat('d/M/yyyy').format(expense['date'])}',
+                                    style: Theme.of(context).textTheme.bodySmall?.copyWith(color: AppTheme.textSecondary),
+                                  ),
+                                  const Spacer(),
+                                  Text(
+                                    NumberFormat.currency(symbol: '\$', decimalDigits: 2).format(expense['amount']),
+                                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                                      color: AppTheme.errorColor,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              if (expense['isMonthly'] == true)
+                                Padding(
+                                  padding: const EdgeInsets.only(top: 8),
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                    decoration: BoxDecoration(
+                                      color: AppTheme.primaryColor.withOpacity(0.1),
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                    child: Text(
+                                      'Gasto mensual recurrente',
+                                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                        color: AppTheme.primaryColor,
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              if (expense['notes'] != null && expense['notes'].toString().isNotEmpty)
+                                Padding(
+                                  padding: const EdgeInsets.only(top: 8),
+                                  child: Container(
+                                    width: double.infinity,
+                                    padding: const EdgeInsets.all(12),
+                                    decoration: BoxDecoration(
+                                      color: Colors.grey.shade50,
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                    child: Text(
+                                      expense['notes'],
+                                      style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Colors.grey.shade600),
+                                    ),
+                                  ),
+                                ),
+                            ],
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildExpenseCategoriesGrid() {
+    final categories = [
+      {'name': 'Casa', 'amount': _dataManager.casaExpenses, 'icon': Icons.home, 'color': Colors.red},
+      {'name': 'Luz', 'amount': _dataManager.luzExpenses, 'icon': Icons.lightbulb, 'color': Colors.orange},
+      {'name': 'Agua', 'amount': _dataManager.aguaExpenses, 'icon': Icons.water_drop, 'color': Colors.blue},
+      {'name': 'Teléfono/Internet', 'amount': _dataManager.telefonoInternetExpenses, 'icon': Icons.phone, 'color': Colors.purple},
+      {'name': 'Materiales de Belleza', 'amount': _dataManager.materialesBellezaExpenses, 'icon': Icons.spa, 'color': Colors.pink},
+      {'name': 'Suministros', 'amount': _dataManager.suministrosExpenses, 'icon': Icons.inventory, 'color': Colors.green},
+      {'name': 'Marketing', 'amount': _dataManager.marketingExpenses, 'icon': Icons.campaign, 'color': Colors.deepOrange},
+      {'name': 'Transporte', 'amount': _dataManager.transporteExpenses, 'icon': Icons.directions_car, 'color': Colors.cyan},
+      {'name': 'Seguros', 'amount': _dataManager.segurosExpenses, 'icon': Icons.security, 'color': Colors.lime},
+      {'name': 'Impuestos', 'amount': _dataManager.impuestosExpenses, 'icon': Icons.receipt_long, 'color': Colors.red.shade700},
+      {'name': 'Mantenimiento', 'amount': _dataManager.mantenimientoExpenses, 'icon': Icons.build, 'color': Colors.teal},
+      {'name': 'Otros', 'amount': _dataManager.otrosExpenses, 'icon': Icons.more_horiz, 'color': Colors.grey},
+    ];
+
+    return GridView.builder(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 3,
+        crossAxisSpacing: 12,
+        mainAxisSpacing: 12,
+        childAspectRatio: 1.2,
+      ),
+      itemCount: categories.length,
+      itemBuilder: (context, index) {
+        final category = categories[index];
+        return Card(
+          elevation: 2,
+          shadowColor: Colors.black.withOpacity(0.1),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          child: Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(12),
+              gradient: LinearGradient(
+                colors: [
+                  (category['color'] as Color).withOpacity(0.1),
+                  (category['color'] as Color).withOpacity(0.05),
+                ],
+              ),
+            ),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(
+                  category['icon'] as IconData,
+                  color: category['color'] as Color,
+                  size: 24,
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  category['name'] as String,
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    fontWeight: FontWeight.w600,
+                  ),
+                  textAlign: TextAlign.center,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  NumberFormat.currency(symbol: '\$', decimalDigits: 0).format(category['amount'] as double),
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: category['color'] as Color,
+                    fontWeight: FontWeight.bold,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Color _getCategoryColor(String category) {
+    switch (category.toLowerCase()) {
+      case 'casa':
+        return Colors.red;
+      case 'luz':
+        return Colors.orange;
+      case 'agua':
+        return Colors.blue;
+      case 'teléfono/internet':
+      case 'telefono/internet':
+        return Colors.purple;
+      case 'materiales de belleza':
+      case 'materiales_belleza':
+        return Colors.pink;
+      case 'suministros':
+        return Colors.green;
+      case 'marketing':
+        return Colors.deepOrange;
+      case 'transporte':
+        return Colors.cyan;
+      case 'seguros':
+        return Colors.lime;
+      case 'impuestos':
+        return Colors.red.shade700;
+      case 'mantenimiento':
+        return Colors.teal;
+      default:
+        return Colors.grey;
+    }
+  }
+
+  IconData _getCategoryIcon(String category) {
+    switch (category.toLowerCase()) {
+      case 'casa':
+        return Icons.home;
+      case 'luz':
+        return Icons.lightbulb;
+      case 'agua':
+        return Icons.water_drop;
+      case 'teléfono/internet':
+      case 'telefono/internet':
+        return Icons.phone;
+      case 'materiales de belleza':
+      case 'materiales_belleza':
+        return Icons.spa;
+      case 'suministros':
+        return Icons.inventory;
+      case 'marketing':
+        return Icons.campaign;
+      case 'transporte':
+        return Icons.directions_car;
+      case 'seguros':
+        return Icons.security;
+      case 'impuestos':
+        return Icons.receipt_long;
+      case 'mantenimiento':
+        return Icons.build;
+      default:
+        return Icons.more_horiz;
+    }
   }
 }

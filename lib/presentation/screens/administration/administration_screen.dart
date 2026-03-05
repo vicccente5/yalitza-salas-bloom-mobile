@@ -2,8 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:intl/intl.dart';
 
-import '../../../data/database/app_database.dart';
-import '../../bloc/database/database_bloc.dart';
+import '../../../data/models/data_manager.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/administration/financial_summary_card.dart';
 import '../../widgets/administration/completed_appointment_item.dart';
@@ -16,18 +15,19 @@ class AdministrationScreen extends StatefulWidget {
 }
 
 class _AdministrationScreenState extends State<AdministrationScreen> {
-  List<Appointment> _completedAppointments = [];
-  List<Client> _clients = [];
-  List<Service> _services = [];
-  double _monthlyIncome = 0.0;
-  double _monthlyCosts = 0.0;
-  double _monthlyProfit = 0.0;
-  bool _isLoading = true;
-
+  final DataManager _dataManager = DataManager();
+  
   @override
   void initState() {
     super.initState();
+    _dataManager.addListener(_loadFinancialData);
     _loadFinancialData();
+  }
+
+  @override
+  void dispose() {
+    _dataManager.removeListener(_loadFinancialData);
+    super.dispose();
   }
 
   Future<void> _loadFinancialData() async {
@@ -36,24 +36,17 @@ class _AdministrationScreenState extends State<AdministrationScreen> {
     });
 
     try {
-      final database = context.read<DatabaseBloc>().database;
-      
-      final completedAppointments = await database.getCompletedAppointments();
-      final clients = await database.getAllClients();
-      final services = await database.getAllServices();
-      final monthlyIncome = await database.getMonthlyIncome();
-      final monthlyCosts = await database.getMonthlyCosts();
-      final monthlyProfit = await database.getMonthlyProfit();
-
+      // Los datos se cargan automáticamente desde DataManager
       setState(() {
-        _completedAppointments = completedAppointments;
-        _clients = clients;
-        _services = services;
-        _monthlyIncome = monthlyIncome;
-        _monthlyCosts = monthlyCosts;
-        _monthlyProfit = monthlyProfit;
         _isLoading = false;
       });
+    } catch (e) {
+      setState(() {
+        _isLoading = false;
+      });
+    }
+  }
+        }
     } catch (e) {
       setState(() {
         _isLoading = false;
@@ -87,13 +80,13 @@ class _AdministrationScreenState extends State<AdministrationScreen> {
               mainAxisSize: MainAxisSize.min,
               children: [
                 Icon(
-                  Icons.database,
+                  Icons.cloud_done,
                   size: 16,
                   color: AppTheme.successColor,
                 ),
                 const SizedBox(width: 4),
                 Text(
-                  'BD Local',
+                  'Supabase',
                   style: TextStyle(
                     color: AppTheme.successColor,
                     fontSize: 12,
@@ -108,7 +101,10 @@ class _AdministrationScreenState extends State<AdministrationScreen> {
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : RefreshIndicator(
-              onRefresh: _loadFinancialData,
+              onRefresh: () async {
+                await _dataManager.refreshFromCloud();
+                _loadFinancialData();
+              },
               child: SingleChildScrollView(
                 padding: const EdgeInsets.all(16),
                 child: Column(
@@ -128,7 +124,7 @@ class _AdministrationScreenState extends State<AdministrationScreen> {
                             value: NumberFormat.currency(
                               symbol: '\$',
                               decimalDigits: 2,
-                            ).format(_monthlyIncome),
+                            ).format(_dataManager.monthlyIncome),
                             icon: Icons.trending_up,
                             color: AppTheme.successColor,
                           ),
@@ -140,7 +136,7 @@ class _AdministrationScreenState extends State<AdministrationScreen> {
                             value: NumberFormat.currency(
                               symbol: '\$',
                               decimalDigits: 2,
-                            ).format(_monthlyCosts),
+                            ).format(_dataManager.totalMonthlyExpenses),
                             icon: Icons.trending_down,
                             color: AppTheme.errorColor,
                           ),
@@ -148,84 +144,101 @@ class _AdministrationScreenState extends State<AdministrationScreen> {
                       ],
                     ),
                     const SizedBox(height: 12),
-                    FinancialSummaryCard(
-                      title: 'Ganancia del Mes',
-                      value: NumberFormat.currency(
-                        symbol: '\$',
-                        decimalDigits: 2,
-                      ).format(_monthlyProfit),
-                      icon: Icons.account_balance,
-                      color: AppTheme.primaryColor,
-                    ),
-                    const SizedBox(height: 24),
-
-                    // Completed Appointments History
                     Row(
                       children: [
-                        Text(
-                          'Historial de Citas Completadas',
-                          style: Theme.of(context).textTheme.headlineSmall,
-                        ),
-                        const Spacer(),
-                        Text(
-                          '${_completedAppointments.length} citas',
-                          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                            color: AppTheme.textSecondary,
+                        Expanded(
+                          child: FinancialSummaryCard(
+                            title: 'Ganancia del Mes',
+                            value: NumberFormat.currency(
+                              symbol: '\$',
+                              decimalDigits: 2,
+                            ).format(_dataManager.monthlyIncome - _dataManager.totalMonthlyExpenses),
+                            icon: Icons.account_balance,
+                            color: AppTheme.primaryColor,
                           ),
                         ),
                       ],
                     ),
+                    const SizedBox(height: 24),
+                    
+                    // Completed Appointments
+                    Text(
+                      'Citas Completadas del Mes',
+                      style: Theme.of(context).textTheme.headlineSmall,
+                    ),
                     const SizedBox(height: 16),
-                    if (_completedAppointments.isEmpty)
-                      Container(
-                        width: double.infinity,
-                        padding: const EdgeInsets.all(24),
-                        decoration: BoxDecoration(
-                          color: AppTheme.surfaceColor,
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: Colors.grey.shade300),
+                    ListView.builder(
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      itemCount: _dataManager.completedAppointments.length,
+                      itemBuilder: (context, index) {
+                        final appointment = _dataManager.completedAppointments[index];
+                        return CompletedAppointmentItem(
+                          appointment: appointment,
+                          onTap: () {
+                            // Aquí podrías agregar funcionalidad para ver detalles
+                          },
+                        );
+                      },
+                    ),
+                    const SizedBox(height: 24),
+                    
+                    // Statistics
+                    Text(
+                      'Estadísticas del Mes',
+                      style: Theme.of(context).textTheme.headlineSmall,
+                    ),
+                    const SizedBox(height: 16),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: FinancialSummaryCard(
+                            title: 'Total Citas',
+                            value: _dataManager.completedAppointments.length.toString(),
+                            icon: Icons.calendar_today,
+                            color: AppTheme.primaryColor,
+                          ),
                         ),
-                        child: Column(
-                          children: [
-                            Icon(
-                              Icons.check_circle_outline,
-                              size: 48,
-                              color: Colors.grey.shade400,
-                            ),
-                            const SizedBox(height: 8),
-                            Text(
-                              'No hay citas completadas',
-                              style: TextStyle(
-                                color: Colors.grey.shade600,
-                                fontSize: 16,
-                              ),
-                            ),
-                          ],
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: FinancialSummaryCard(
+                            title: 'Total Clientes',
+                            value: _dataManager.clients.length.toString(),
+                            icon: Icons.people,
+                            color: AppTheme.secondaryColor,
+                          ),
                         ),
-                      )
-                    else
-                      ListView.separated(
-                        shrinkWrap: true,
-                        physics: const NeverScrollableScrollPhysics(),
-                        itemCount: _completedAppointments.length,
-                        separatorBuilder: (context, index) => const SizedBox(height: 8),
-                        itemBuilder: (context, index) {
-                          final appointment = _completedAppointments[index];
-                          final client = _clients.firstWhere(
-                            (client) => client.id == appointment.clientId,
-                            orElse: () => Client(
-                              id: appointment.clientId,
-                              name: 'Cliente desconocido',
-                              createdAt: DateTime.now(),
-                            ),
-                          );
-                          final service = _services.firstWhere(
-                            (service) => service.id == appointment.serviceId,
-                            orElse: () => Service(
-                              id: appointment.serviceId,
-                              name: 'Servicio desconocido',
-                              price: 0.0,
-                              duration: 0,
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: FinancialSummaryCard(
+                            title: 'Total Servicios',
+                            value: _dataManager.services.length.toString(),
+                            icon: Icons.spa,
+                            color: AppTheme.primaryColor,
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: FinancialSummaryCard(
+                            title: 'Total Suministros',
+                            value: _dataManager.supplies.length.toString(),
+                            icon: Icons.inventory,
+                            color: AppTheme.secondaryColor,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
+    );
+  }
+}
                               category: 'Desconocido',
                               createdAt: DateTime.now(),
                             ),
